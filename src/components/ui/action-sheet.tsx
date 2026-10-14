@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import i18n from '@/i18n';
 
 export type SheetAction = {
   id: string;
@@ -53,7 +54,7 @@ export function ActionSheet({
       <Pressable
         style={[styles.backdrop, { backgroundColor: theme.overlay }]}
         onPress={onClose}
-        accessibilityLabel="Close"
+        accessibilityLabel={i18n.t('general.close')}
         accessibilityRole="button">
         <Pressable
           style={[

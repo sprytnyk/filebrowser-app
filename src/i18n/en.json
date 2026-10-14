@@ -388,6 +388,13 @@
     "signedOutOfServer": "You're signed out of this server. Sign in to continue.",
     "serverName": "Name",
     "serverNameHint": "Optional. Leave empty to use the name the server reports.",
-    "renameServer": "Rename server"
+    "renameServer": "Rename server",
+    "shares": "Shares",
+    "changePassword": "Change password",
+    "selectedCount": "{count} selected",
+    "durationHours": "{h} h {m} min",
+    "durationMinutes": "{m} min {s} s",
+    "durationMinutesOnly": "{m} min",
+    "durationSeconds": "{s} s"
   }
 }

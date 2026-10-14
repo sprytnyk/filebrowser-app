@@ -144,7 +144,7 @@ export default function SettingsScreen() {
           {canChangePassword ? (
             <Row
               icon="password"
-              title={t('general.change', { suffix: ` ${t('general.password')}` })}
+              title={t('mobile.changePassword')}
               onPress={() => router.push('/settings/password')}
               chevron
             />

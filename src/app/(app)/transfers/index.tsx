@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { ToastHost } from '@/components/ui/toast-host';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatLocale } from '@/i18n';
 import { formatDuration, formatSize } from '@/lib/files';
 import { profileName, useServers } from '@/session/servers';
 import {
@@ -241,7 +242,7 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
 
 function finishedTime(transfer: Transfer) {
   if (!transfer.finishedAt) return '';
-  return new Date(transfer.finishedAt).toLocaleTimeString(undefined, {
+  return new Date(transfer.finishedAt).toLocaleTimeString(formatLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   });

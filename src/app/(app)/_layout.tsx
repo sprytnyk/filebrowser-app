@@ -40,7 +40,7 @@ export default function AppTabs() {
         ) : null}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="shares">
-        <NativeTabs.Trigger.Label>{t('general.share', { suffix: 's' })}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>{t('mobile.shares')}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="share" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">

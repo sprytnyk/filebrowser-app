@@ -297,7 +297,7 @@ export default function FolderScreen() {
   ];
 
   const title = selecting
-    ? t('general.selected', { prefix: `${selected.size} ` })
+    ? t('mobile.selectedCount', { count: selected.size })
     : stackRoot
       ? serverName
       : dir === '/'

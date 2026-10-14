@@ -1,4 +1,4 @@
-import '@/i18n';
+import { useLanguageSync } from '@/i18n';
 
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
@@ -39,6 +39,7 @@ function makeQueryClient() {
 function RootStack() {
   const { server, token, adding, switching } = useSession();
   const { t } = useTranslation();
+  useLanguageSync();
   const dark = useIsDark();
   const colors = Colors[dark ? 'dark' : 'light'];
   const base = dark ? DarkTheme : DefaultTheme;
@@ -69,10 +70,7 @@ function RootStack() {
         </Stack.Protected>
         <Stack.Protected guard={!!server && !!token && !adding && !switching}>
           <Stack.Screen name="(app)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="settings/password"
-            options={{ title: t('general.change', { suffix: ` ${t('general.password')}` }) }}
-          />
+          <Stack.Screen name="settings/password" options={{ title: t('mobile.changePassword') }} />
           <Stack.Screen name="move-copy" options={{ presentation: 'modal' }} />
           <Stack.Screen
             name="share-create"

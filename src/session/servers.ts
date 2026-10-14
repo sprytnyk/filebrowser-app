@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 
 import { configureApi } from '@/api/client';
 import { type ServerInfo } from '@/api/types';
+import i18n from '@/i18n';
 import { isExpired } from '@/lib/jwt';
 import { readJson, StorageKeys, tokenKey, writeJson } from '@/session/storage';
 
@@ -138,7 +139,7 @@ export function setActive(id: string) {
 export function credentialsFor(id: string): { baseUrl: string; headers: Record<string, string> } {
   const profile = state.profiles.find((p) => p.id === id);
   const token = state.tokens[id];
-  if (!profile || !token) throw new Error('Signed out of this server');
+  if (!profile || !token) throw new Error(i18n.t('mobile.signedOutOfServer'));
   return { baseUrl: profile.server.baseUrl, headers: { Authorization: `Bearer ${token}` } };
 }
 

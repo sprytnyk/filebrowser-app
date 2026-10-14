@@ -43,7 +43,14 @@
           }
         }
       ],
-      "expo-localization",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "android": ["en", "uk"]
+          }
+        }
+      ],
       [
         "expo-image-picker",
         {

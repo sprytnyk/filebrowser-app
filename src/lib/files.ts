@@ -1,6 +1,7 @@
 import { type FileItem } from '@/api/types';
 import { type IconName } from '@/components/ui/icon';
 import { IconColors } from '@/constants/theme';
+import i18n, { formatLocale } from '@/i18n';
 import { type SortBy } from '@/session/prefs';
 
 export type FileKind =
@@ -73,7 +74,7 @@ export function formatSize(bytes: number): string {
 export function formatDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(formatLocale(), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -109,7 +110,11 @@ export function formatDuration(ms: number): string {
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (h > 0) return `${h} h ${m} min`;
-  if (m > 0) return s > 0 ? `${m} min ${s} s` : `${m} min`;
-  return `${s} s`;
+  if (h > 0) return i18n.t('mobile.durationHours', { h, m });
+  if (m > 0) {
+    return s > 0
+      ? i18n.t('mobile.durationMinutes', { m, s })
+      : i18n.t('mobile.durationMinutesOnly', { m });
+  }
+  return i18n.t('mobile.durationSeconds', { s });
 }

@@ -1,6 +1,7 @@
 import { type TFunction } from 'i18next';
 
 import { type ShareLink } from '@/api/types';
+import { formatLocale } from '@/i18n';
 
 /**
  * Share paths come back with or without a trailing slash (moved items keep one), so compare
@@ -45,7 +46,7 @@ export function itemKey(item: { source: string; path: string }) {
 export function expiryText(share: ShareLink, t: TFunction, now: number) {
   if (!share.expire) return t('general.permanent');
   const date = new Date(share.expire * 1000);
-  const label = date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const label = date.toLocaleString(formatLocale(), { dateStyle: 'medium', timeStyle: 'short' });
   return date.getTime() < now
     ? `${t('general.expiration')}: ${label}`
     : `${t('general.expires')} ${label}`;
