@@ -65,8 +65,24 @@ function joinBatch(): number {
 }
 
 function emit() {
+  if (emitTimer) {
+    clearTimeout(emitTimer);
+    emitTimer = null;
+  }
   transfers = [...transfers];
   listeners.forEach((l) => l());
+}
+
+/**
+ * Native tasks report progress hundreds of times a second; re-rendering on each one keeps
+ * the JS thread so busy that taps (like Cancel) get lost. Byte counts publish at most every
+ * PROGRESS_INTERVAL ms; status changes still publish at once.
+ */
+const PROGRESS_INTERVAL = 250;
+let emitTimer: ReturnType<typeof setTimeout> | null = null;
+
+function emitSoon() {
+  emitTimer ??= setTimeout(emit, PROGRESS_INTERVAL);
 }
 
 export function addTransfer(
@@ -133,7 +149,9 @@ export function updateTransfer(id: string, patch: Partial<Internal>) {
     }
   }
   transfers[idx] = next;
-  emit();
+  const progressOnly = Object.keys(patch).every((k) => k === 'loaded' || k === 'total');
+  if (progressOnly) emitSoon();
+  else emit();
 }
 
 export function getTransfer(id: string): Internal | undefined {
