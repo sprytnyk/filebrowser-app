@@ -18,7 +18,17 @@ import {
   updateTransfer,
 } from '@/transfers/store';
 
-export type PickedFile = { uri: string; name: string; size: number; mimeType: string | null };
+export type PickedFile = {
+  uri: string;
+  name: string;
+  size: number;
+  mimeType: string | null;
+  /** Subfolder under the upload target, without slashes at the ends ("" or "a/b"). */
+  relDir?: string;
+};
+
+/** A device folder picked for upload: its subfolders (relative paths) and every file in it. */
+export type PickedFolder = { name: string; dirs: string[]; files: PickedFile[] };
 
 const MB = 1024 * 1024;
 const enqueue = createQueue(2);
@@ -61,6 +71,68 @@ export async function pickMedia(): Promise<PickedFile[]> {
       mimeType: a.mimeType ?? null,
     };
   });
+}
+
+/**
+ * Name of a SAF document from its URI. Only external-storage IDs ("primary:DCIM/a.jpg")
+ * carry the path; other providers use opaque IDs, so null there.
+ */
+function safName(uri: string): string | null {
+  if (!uri.startsWith('content://com.android.externalstorage.documents/')) return null;
+  const trimmed = uri.replace(/\/+$/, '');
+  const encoded = trimmed.split('/document/')[1] ?? trimmed.split('/tree/')[1];
+  if (!encoded) return null;
+  const id = decodeURIComponent(encoded);
+  const path = id.slice(id.indexOf(':') + 1);
+  return path.split('/').pop() || null;
+}
+
+/**
+ * Each folder is one round of native SAF queries; yielding between folders keeps the app
+ * responsive and lets the JS engine collect the native handles of big trees as it goes
+ * (one synchronous walk over a large folder crashed Hermes).
+ */
+const yieldToEventLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+async function walkFolder(dir: Directory, rel: string, out: PickedFolder) {
+  await yieldToEventLoop();
+  const entries = dir.list();
+  const subdirs: [Directory, string][] = [];
+  // Directory.info() lists display names in the same order as list().
+  let names: string[] | undefined;
+  entries.forEach((entry, i) => {
+    let name = safName(entry.uri);
+    if (!name) {
+      names ??= dir.info().files ?? [];
+      name = names[i] ?? `${i}`;
+    }
+    const path = rel ? `${rel}/${name}` : name;
+    if (entry instanceof Directory) {
+      out.dirs.push(path);
+      subdirs.push([entry, path]);
+    } else {
+      // Uploads are sent as octet-stream, so skip the extra MIME type query per file.
+      out.files.push({ uri: entry.uri, name, size: entry.size ?? 0, mimeType: null, relDir: rel });
+    }
+  });
+  for (const [sub, path] of subdirs) await walkFolder(sub, path, out);
+}
+
+/**
+ * Lets the user pick a device folder and lists everything in it, subfolders included.
+ * `onReading` fires with the folder's name once it's picked, before the (possibly slow) scan.
+ */
+export async function pickFolder(onReading: (name: string) => void): Promise<PickedFolder | null> {
+  let root: Directory;
+  try {
+    root = await withLockSuspended(() => Directory.pickDirectoryAsync());
+  } catch {
+    return null;
+  }
+  const folder: PickedFolder = { name: safName(root.uri) ?? root.name, dirs: [], files: [] };
+  onReading(folder.name);
+  await walkFolder(root, '', folder);
+  return folder;
 }
 
 type UploadTarget = { source: string; dir: string; overwrite: boolean; chunkSizeMb: number };
@@ -320,14 +392,15 @@ export function uploadFiles(
   onFinished: (ok: boolean) => void,
 ) {
   for (const picked of files) {
+    const dir = picked.relDir ? `${joinPath(target.dir, picked.relDir)}/` : target.dir;
     const id = addTransfer({
       kind: 'upload',
       name: picked.name,
       from: '',
-      target: `${target.source}:${target.dir}`,
+      target: `${target.source}:${dir}`,
       total: picked.size,
     });
-    const path = joinPath(target.dir, picked.name);
+    const path = joinPath(dir, picked.name);
 
     const job = async () => {
       if (getTransfer(id)?.status === 'cancelled') return;

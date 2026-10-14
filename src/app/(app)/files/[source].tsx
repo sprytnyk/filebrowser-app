@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
-import { getListing, search, searchResultToItem } from '@/api/resources';
+import { createFolder, getListing, search, searchResultToItem } from '@/api/resources';
 import { listShares } from '@/api/share';
 import { type FileItem, type SourcePermissions } from '@/api/types';
 import { Breadcrumbs } from '@/components/files/breadcrumbs';
@@ -31,14 +31,20 @@ import { useOpenFile } from '@/hooks/use-open-file';
 import { useTheme } from '@/hooks/use-theme';
 import { ask } from '@/lib/dialog';
 import { formatDate, formatSize, isValidName, sortItems } from '@/lib/files';
-import { errorMessage } from '@/lib/notify';
+import { errorMessage, showError, toast } from '@/lib/notify';
 import { itemKey, sharedKeys } from '@/lib/shares';
 import { baseName, parentDir } from '@/lib/url';
 import { setPrefs, type SortBy, usePrefs } from '@/session/prefs';
 import { useSelf, useServer } from '@/session/session';
 import { announceTransfers } from '@/transfers/announce';
 import { downloadItems } from '@/transfers/download';
-import { type PickedFile, pickDocuments, pickMedia, uploadFiles } from '@/transfers/upload';
+import {
+  type PickedFile,
+  pickDocuments,
+  pickFolder,
+  pickMedia,
+  uploadFiles,
+} from '@/transfers/upload';
 
 const NO_PERMS: SourcePermissions = {
   view: true,
@@ -190,6 +196,74 @@ export default function FolderScreen() {
       () => void invalidate(source, dir),
     );
     announceTransfers(files.length);
+  }
+
+  /** Uploads a device folder with its subfolders into the current folder. */
+  async function startFolderUpload() {
+    let folder;
+    try {
+      folder = await pickFolder((name) => toast(t('mobile.readingFolder', { name })));
+    } catch (e) {
+      showError(e);
+      return;
+    }
+    if (!folder) return;
+    if (folder.files.length > 0) {
+      const size = folder.files.reduce((sum, f) => sum + f.size, 0);
+      const choice = await ask({
+        title: t('mobile.uploadFolder'),
+        message: t('mobile.uploadFolderConfirm', {
+          name: folder.name,
+          count: folder.files.length,
+          size: formatSize(size),
+        }),
+        buttons: [
+          { id: 'cancel', label: t('general.cancel'), kind: 'cancel' },
+          { id: 'upload', label: t('mobile.upload') },
+        ],
+      });
+      if (choice !== 'upload') return;
+    }
+    const exists = (listing.data?.items ?? []).some((i) => i.name === folder.name);
+    if (exists) {
+      const choice = await ask({
+        title: t('general.conflict'),
+        message: t('mobile.uploadFolderConflict', { name: folder.name }),
+        buttons: [
+          { id: 'cancel', label: t('general.cancel'), kind: 'cancel' },
+          { id: 'replace', label: t('general.replace'), kind: 'destructive' },
+        ],
+      });
+      if (choice !== 'replace') return;
+    }
+    // Folders first, parents before children; when merging, existing ones are fine.
+    const dirs = [folder.name, ...folder.dirs.map((d) => `${folder.name}/${d}`)];
+    for (const rel of dirs) {
+      try {
+        await createFolder(source, dir, rel);
+      } catch (e) {
+        if (!exists && rel === folder.name) {
+          showError(e);
+          return;
+        }
+      }
+    }
+    void invalidate(source, dir);
+    if (folder.files.length === 0) return;
+    uploadFiles(
+      folder.files.map((f) => ({
+        ...f,
+        relDir: f.relDir ? `${folder.name}/${f.relDir}` : folder.name,
+      })),
+      {
+        source,
+        dir,
+        overwrite: exists,
+        chunkSizeMb: self?.fileLoading.uploadChunkSizeMb ?? 10,
+      },
+      () => void invalidate(source, dir),
+    );
+    announceTransfers(folder.files.length);
   }
 
   function infoDetails(item: FileItem) {
@@ -539,11 +613,17 @@ export default function FolderScreen() {
               actions: [
                 { id: 'files', title: t('mobile.uploadFiles'), icon: 'upload_file' },
                 { id: 'media', title: t('mobile.uploadMedia'), icon: 'photo_library' },
+                {
+                  id: 'uploadFolder',
+                  title: t('mobile.uploadFolder'),
+                  icon: 'drive_folder_upload',
+                },
                 { id: 'folder', title: t('files.newFolder'), icon: 'create_new_folder' },
               ],
               onSelect: (id) => {
                 if (id === 'files') void startUpload(pickDocuments);
                 else if (id === 'media') void startUpload(pickMedia);
+                else if (id === 'uploadFolder') void startFolderUpload();
                 else setPrompt({ kind: 'newFolder' });
               },
             })
