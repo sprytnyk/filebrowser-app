@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, type FileHandle, FileMode, Paths, UploadType } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 
-import { messageFromBody } from '@/api/client';
+import { messageFromBody, NetworkError } from '@/api/client';
 import { uploadUrl } from '@/api/resources';
 import i18n from '@/i18n';
 import { errorMessage } from '@/lib/notify';
@@ -21,6 +21,9 @@ export type PickedFile = { uri: string; name: string; size: number; mimeType: st
 
 const MB = 1024 * 1024;
 const enqueue = createQueue(2);
+/** Waits before each retry of a request that failed on the network or at a gateway. */
+const RETRY_DELAYS = [2000, 5000, 10000];
+const GATEWAY_ERRORS = [502, 503, 504];
 
 export async function pickDocuments(): Promise<PickedFile[]> {
   // Keep the picker's content:// URIs: chunked uploads read them through the content
@@ -92,8 +95,49 @@ function sessionFor(key: string) {
   return id;
 }
 
-/** One POST of `file`'s bytes to transfer `id`'s server; reports bytes sent through `onSent`. */
+/**
+ * The native task rejects with "Call to function 'FileSystemUploadTask.start' has been
+ * rejected. → Caused by: Unable to upload a file: <cause>" when no response arrives (DNS,
+ * dropped connection, timeout); keep only the cause.
+ */
+function networkError(e: unknown) {
+  const raw = e instanceof Error ? e.message : String(e);
+  const cause = raw.split('Unable to upload a file:').pop()!.trim();
+  return new NetworkError(cause, /timed? ?out/i.test(cause));
+}
+
+function isRetryable(e: unknown) {
+  return (
+    e instanceof NetworkError || (e instanceof UploadHttpError && GATEWAY_ERRORS.includes(e.status))
+  );
+}
+
+/**
+ * One POST of `file`'s bytes to transfer `id`'s server; reports bytes sent through `onSent`.
+ * Network and gateway failures are retried a few times, since a short Wi-Fi or DNS drop
+ * shouldn't fail a file (chunks resend at the same offset in the same session).
+ */
 async function postBody(
+  id: string,
+  url: (base: string) => string,
+  file: File,
+  headers: Record<string, string>,
+  onSent: (bytes: number) => void,
+  register: (cancel: () => void) => void,
+) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await postOnce(id, url, file, headers, onSent, register);
+    } catch (e) {
+      if (!isRetryable(e) || attempt >= RETRY_DELAYS.length) throw e;
+      if (getTransfer(id)?.status === 'cancelled') throw e;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt]));
+      if (getTransfer(id)?.status === 'cancelled') throw e;
+    }
+  }
+}
+
+async function postOnce(
   id: string,
   url: (base: string) => string,
   file: File,
@@ -111,7 +155,12 @@ async function postBody(
   const sub = task.addListener('progress', ({ bytesSent }) => onSent(bytesSent));
   register(() => task.cancel());
   try {
-    const result = await task.uploadAsync();
+    let result;
+    try {
+      result = await task.uploadAsync();
+    } catch (e) {
+      throw networkError(e);
+    }
     if (result.status < 200 || result.status >= 300) {
       throw new UploadHttpError(result.status, result.body);
     }
@@ -216,7 +265,9 @@ export function uploadFiles(
         onFinished(true);
       } catch (e) {
         if (getTransfer(id)?.status !== 'cancelled') {
-          updateTransfer(id, { status: 'error', error: errorMessage(e) });
+          // Keep the cause ("Unable to resolve host …") under the generic message.
+          const cause = e instanceof NetworkError && e.message ? `\n${e.message}` : '';
+          updateTransfer(id, { status: 'error', error: errorMessage(e) + cause });
         }
         onFinished(false);
       }
