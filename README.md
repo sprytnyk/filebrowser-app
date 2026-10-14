@@ -22,7 +22,8 @@ stay in the web UI.
 - **Browse.** List or grid view, thumbnails, sort by name, size or date, and search.
 - **Manage files.** Create folders, rename, move, copy and delete, one at a time or several at
   once.
-- **Upload** from the file picker or the photo gallery. Large files go up in chunks.
+- **Upload** from the file picker, the photo gallery, or a whole folder with its subfolders.
+  Large files go up in chunks, retry after short network drops, and resume where they stopped.
 - **Download** to a device folder you pick once. Folders and multiple items download as a zip.
 - **View** images, video and audio in the app. Other files open in the app of your choice.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
@@ -89,13 +90,18 @@ crash reporting.
 ## Testing
 
 The app was tested on a physical Android phone, running in Expo Go (SDK 57), against
-FileBrowser Quantum **v2.0.1-stable** servers running in Docker. That covered:
+FileBrowser Quantum **v2.0.1-stable** servers running in Docker, and against a real
+self-hosted server over HTTPS. That covered:
 
 - adding servers, with and without a subpath, and switching between them
 - password sign-in and two-factor codes
 - browsing several sources, thumbnails, list and grid views
 - creating, renaming, moving, copying and deleting files and folders, including bulk actions
 - uploads from the file picker and the gallery, including while switching servers
+- folder uploads with subfolders
+- files of different types and sizes, from a few KB to about 1 GB: APKs, ISO images, zip
+  archives, MP4 videos and images
+- cancelling, retrying and resuming large uploads, and recovering from network drops
 - downloads of single files and of folders as zip
 - the image viewer and video playback
 - creating and deleting shares, and copying their links
