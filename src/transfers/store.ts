@@ -32,6 +32,10 @@ export type Transfer = {
 };
 
 type Internal = Transfer & {
+  /** Batch it counts toward in the overall progress (see batchProgress). */
+  batch: number;
+  /** What it added to its batch's settled totals when it finished. */
+  settled?: { loaded: number; total: number };
   cancel?: () => void;
   restart?: () => void;
   lastSampleAt?: number;
@@ -48,6 +52,18 @@ let transfers: Internal[] = [];
 const listeners = new Set<() => void>();
 let counter = 0;
 
+/**
+ * Transfers started while others were still running form one batch, so the overall
+ * progress keeps counting files that finished instead of jumping back as they leave the
+ * running list. A new batch starts once everything has settled.
+ */
+let batch = { id: 0, loaded: 0, total: 0 };
+
+function joinBatch(): number {
+  if (!transfers.some(isRunning)) batch = { id: batch.id + 1, loaded: 0, total: 0 };
+  return batch.id;
+}
+
 function emit() {
   transfers = [...transfers];
   listeners.forEach((l) => l());
@@ -63,9 +79,11 @@ export function addTransfer(
   counter += 1;
   const id = `${Date.now().toString(36)}-${counter}`;
   const profile = activeProfile();
+  const batchId = joinBatch();
   transfers.push({
     ...t,
     id,
+    batch: batchId,
     serverId: profile?.id ?? '',
     serverLabel: profile ? profileName(profile) : '',
     status: 'queued',
@@ -97,6 +115,13 @@ export function updateTransfer(id: string, patch: Partial<Internal>) {
   if (patch.status && FINISHED.includes(patch.status)) {
     next.finishedAt = now;
     next.rate = undefined;
+    if (isRunning(prev) && next.batch === batch.id) {
+      // Done counts in full; a failed or cancelled one stops holding the bar back.
+      const loaded = patch.status === 'done' ? next.total || next.loaded : next.loaded;
+      next.settled = { loaded, total: patch.status === 'done' ? loaded : next.loaded };
+      batch.loaded += next.settled.loaded;
+      batch.total += next.settled.total;
+    }
   } else if (patch.loaded !== undefined && next.lastSampleAt !== undefined) {
     // Rate over ~1 s windows, smoothed so the number doesn't jitter.
     const dt = now - next.lastSampleAt;
@@ -131,7 +156,13 @@ export function cancelTransfer(id: string) {
 export function retryTransfer(id: string) {
   const t = getTransfer(id);
   if (!t?.restart || isRunning(t)) return;
+  if (t.batch === batch.id && t.settled) {
+    batch.loaded -= t.settled.loaded;
+    batch.total -= t.settled.total;
+  }
   updateTransfer(id, {
+    batch: joinBatch(),
+    settled: undefined,
     status: 'queued',
     loaded: 0,
     error: undefined,
@@ -148,6 +179,22 @@ export function retryTransfer(id: string) {
 export function clearFinished() {
   transfers = transfers.filter(isRunning);
   emit();
+}
+
+/**
+ * Overall progress of the current batch: what has settled plus what's still running.
+ * `total` is 0 while any running transfer's size is unknown (zip archives).
+ */
+export function batchProgress(running: readonly Transfer[]) {
+  let loaded = batch.loaded;
+  let total = batch.total;
+  let known = true;
+  for (const x of running) {
+    loaded += x.loaded;
+    total += x.total;
+    if (x.total <= 0) known = false;
+  }
+  return { loaded, total: known ? total : 0 };
 }
 
 function subscribe(listener: () => void) {

@@ -13,6 +13,7 @@ import { formatLocale } from '@/i18n';
 import { formatDuration, formatSize } from '@/lib/files';
 import { profileName, useServers } from '@/session/servers';
 import {
+  batchProgress,
   cancelTransfer,
   clearFinished,
   isRunning,
@@ -49,12 +50,13 @@ export default function TransfersScreen() {
             ) : null,
         }}
       />
+      {/* Outside the list so it stays in view while scrolling. */}
+      {running.length > 0 ? <Summary running={running} /> : null}
       <SectionList
         sections={sections}
         keyExtractor={(x) => x.id}
         contentContainerStyle={styles.list}
         stickySectionHeadersEnabled={false}
-        ListHeaderComponent={running.length > 0 ? <Summary running={running} /> : null}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Icon name="swap_vert" size={48} />
@@ -73,27 +75,69 @@ export default function TransfersScreen() {
   );
 }
 
-/** Totals across everything still running. */
+/** Totals across the current batch, including files in it that already finished. */
 function Summary({ running }: { running: Transfer[] }) {
   const { t } = useTranslation();
   const theme = useTheme();
-  const known = running.every((x) => x.total > 0);
-  const loaded = running.reduce((sum, x) => sum + x.loaded, 0);
-  const total = running.reduce((sum, x) => sum + x.total, 0);
+  const { loaded, total } = batchProgress(running);
+  const known = total > 0;
   const rate = running.reduce((sum, x) => sum + (x.rate ?? 0), 0);
-  const parts = [
-    t('mobile.transfersActive', { count: running.length }),
-    known && total > 0 ? `${formatSize(loaded)} / ${formatSize(total)}` : formatSize(loaded),
-    rate > 0 ? `${formatSize(rate)}/s` : null,
-    known && rate > 0
-      ? t('mobile.timeLeft', { time: formatDuration(((total - loaded) / rate) * 1000) })
-      : null,
-  ].filter(Boolean);
 
+  // A band under the header (same color, full width) that the list scrolls beneath. Its
+  // lines and bar are always there, so it keeps one height while the numbers change.
   return (
-    <View style={[styles.summary, { backgroundColor: theme.surfacePrimary }]}>
-      <ThemedText type="small">{parts.join(' · ')}</ThemedText>
-      {known && total > 0 ? <ProgressBar fraction={loaded / total} /> : null}
+    <View
+      style={[
+        styles.summary,
+        { backgroundColor: theme.surfacePrimary, borderColor: theme.surfaceSecondary },
+      ]}>
+      <StatLine
+        type="small"
+        left={t('mobile.transfersActive', { count: running.length })}
+        right={known ? `${formatSize(loaded)} / ${formatSize(total)}` : formatSize(loaded)}
+      />
+      <ProgressBar fraction={known ? loaded / total : 0} />
+      <StatLine
+        left={rate > 0 ? `${formatSize(rate)}/s` : ''}
+        right={
+          known && rate > 0
+            ? t('mobile.timeLeft', { time: formatDuration(((total - loaded) / rate) * 1000) })
+            : ''
+        }
+      />
+    </View>
+  );
+}
+
+/** One line of numbers, start- and end-aligned, with fixed-width digits. */
+function StatLine({
+  left,
+  right,
+  type = 'caption',
+}: {
+  left: string;
+  right?: string;
+  type?: 'small' | 'caption';
+}) {
+  return (
+    <View style={styles.statLine}>
+      <ThemedText
+        type={type}
+        themeColor={type === 'caption' ? 'textSecondary' : undefined}
+        numberOfLines={1}
+        style={[styles.numbers, styles.shrink]}>
+        {/* A space keeps the line's height while it has nothing to show. */}
+        {left || ' '}
+      </ThemedText>
+      {right ? (
+        <ThemedText
+          type={type}
+          themeColor={type === 'caption' ? 'textSecondary' : undefined}
+          numberOfLines={1}
+          style={styles.numbers}>
+          {right}
+        </ThemedText>
+      ) : null}
     </View>
   );
 }
@@ -107,7 +151,7 @@ function ProgressBar({ fraction }: { fraction: number }) {
           styles.bar,
           {
             backgroundColor: theme.primary,
-            width: `${Math.round(Math.min(1, Math.max(0, fraction)) * 100)}%`,
+            width: `${Math.min(1, Math.max(0, fraction)) * 100}%`,
           },
         ]}
       />
@@ -128,21 +172,26 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
   const from = upload ? t('mobile.thisDevice') : transfer.from;
   const to = upload ? transfer.target : transfer.target || t('mobile.openWith');
 
-  let detail: string;
+  // Running rows show two fixed lines (amount, then speed and time left) instead of `detail`.
+  let detail = '';
+  let speed = '';
   switch (status) {
     case 'queued':
       detail = t('mobile.queued');
       break;
     case 'active': {
-      const parts = [
-        total > 0 ? `${Math.floor((loaded / total) * 100)}%` : null,
-        total > 0 ? `${formatSize(loaded)} / ${formatSize(total)}` : formatSize(loaded),
+      detail =
+        total > 0
+          ? `${Math.floor((loaded / total) * 100)}% · ${formatSize(loaded)} / ${formatSize(total)}`
+          : formatSize(loaded);
+      speed = [
         rate ? `${formatSize(rate)}/s` : null,
         rate && total > 0
           ? t('mobile.timeLeft', { time: formatDuration(((total - loaded) / rate) * 1000) })
           : null,
-      ];
-      detail = parts.filter(Boolean).join(' · ');
+      ]
+        .filter(Boolean)
+        .join(' · ');
       break;
     }
     case 'done': {
@@ -212,13 +261,21 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
             {to}
           </ThemedText>
         </View>
-        {status === 'active' && total > 0 ? <ProgressBar fraction={loaded / total} /> : null}
-        <ThemedText
-          type="caption"
-          themeColor={status === 'error' ? 'danger' : 'textSecondary'}
-          numberOfLines={4}>
-          {detail}
-        </ThemedText>
+        {/* Queued rows reserve the bar too, so starting doesn't change the row height. */}
+        {running ? <ProgressBar fraction={total > 0 ? loaded / total : 0} /> : null}
+        {running ? (
+          <>
+            <StatLine left={detail} />
+            <StatLine left={speed} />
+          </>
+        ) : (
+          <ThemedText
+            type="caption"
+            themeColor={status === 'error' ? 'danger' : 'textSecondary'}
+            numberOfLines={status === 'error' ? 6 : 2}>
+            {detail}
+          </ThemedText>
+        )}
       </View>
       {running ? (
         <HeaderButton
@@ -251,10 +308,18 @@ function finishedTime(transfer: Transfer) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
+  numbers: { fontVariant: ['tabular-nums'] },
   list: { padding: Spacing.three, gap: Spacing.two, flexGrow: 1 },
   empty: { alignItems: 'center', gap: Spacing.two, paddingTop: Spacing.six },
   sectionTitle: { marginTop: Spacing.two, marginBottom: Spacing.one },
-  summary: { padding: Spacing.three, borderRadius: Radius.medium, gap: Spacing.two },
+  summary: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.one,
+    paddingBottom: Spacing.three,
+    gap: Spacing.one,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  statLine: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
