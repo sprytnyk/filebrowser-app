@@ -26,6 +26,8 @@ export const StorageKeys = {
   legacyToken: 'fb.token',
   prefs: 'fb.prefs',
   lockBackgroundedAt: 'fb.lock.backgroundedAt',
+  /** Unfinished chunked uploads' session IDs, so a later upload can take them over. */
+  uploadSessions: 'fb.uploadSessions',
 } as const;
 
 /** Each server's session token sits in its own key. */

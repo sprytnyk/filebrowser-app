@@ -8,6 +8,7 @@ import i18n from '@/i18n';
 import { errorMessage } from '@/lib/notify';
 import { joinPath } from '@/lib/url';
 import { withLockSuspended } from '@/lock/lock-state';
+import { readJson, StorageKeys, writeJson } from '@/session/storage';
 import {
   addTransfer,
   createQueue,
@@ -82,17 +83,39 @@ class UploadHttpError extends Error {
 /**
  * Chunked-upload session per destination. The server locks a path to one session until it
  * completes or sits idle for 30 minutes, so a retry after a failure must reuse the old
- * session to take over its lock (and its partial temp file) instead of getting 409.
+ * session to take over its lock (and its partial temp file) instead of getting 409. They're
+ * stored, so this also works after the app was closed or restarted mid-upload.
  */
-const sessions = new Map<string, string>();
+const SESSION_IDLE_MS = 30 * 60 * 1000;
+type Sessions = Record<string, { id: string; at: number }>;
 
+function loadSessions(): Sessions {
+  const now = Date.now();
+  return Object.fromEntries(
+    Object.entries(readJson<Sessions>(StorageKeys.uploadSessions) ?? {}).filter(
+      ([, s]) => now - s.at < SESSION_IDLE_MS,
+    ),
+  );
+}
+
+function saveSessions(all: Sessions) {
+  writeJson(StorageKeys.uploadSessions, Object.keys(all).length > 0 ? all : null);
+}
+
+/** The session for `key`, created if needed; also marks it as just used. */
 function sessionFor(key: string) {
-  let id = sessions.get(key);
-  if (!id) {
-    id = `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-    sessions.set(key, id);
-  }
+  const all = loadSessions();
+  const id =
+    all[key]?.id ?? `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  all[key] = { id, at: Date.now() };
+  saveSessions(all);
   return id;
+}
+
+function endSession(key: string) {
+  const all = loadSessions();
+  delete all[key];
+  saveSessions(all);
 }
 
 /**
@@ -213,10 +236,11 @@ async function uploadChunked(id: string, picked: PickedFile, target: UploadTarge
         (cancel) => updateTransfer(id, { cancel }),
       );
       chunk.delete();
+      sessionFor(sessionKey);
       offset += bytes.length;
       updateTransfer(id, { loaded: offset });
     }
-    sessions.delete(sessionKey);
+    endSession(sessionKey);
   } finally {
     handle?.close();
     try {
