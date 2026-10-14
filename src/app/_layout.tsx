@@ -59,6 +59,8 @@ function RootStack() {
       }}>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShadowVisible: false }}>
+        {/* Always available: the start URL, and where the guards fall back to. */}
+        <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Protected guard={switching}>
           <Stack.Screen name="switching" options={{ headerShown: false, animation: 'none' }} />
         </Stack.Protected>
