@@ -1,55 +1,73 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Colors mirror FileBrowser Quantum's web UI (frontend/public/index.html and
+ * frontend/src/css/_variables.css at v2.0.1-stable), so the app looks like the server it talks to.
  */
-
-import '@/global.css';
-
-import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    background: '#f5f5f5',
+    altBackground: '#dddddd',
+    surfacePrimary: '#ebebeb',
+    surfaceSecondary: '#d3d3d3',
+    textPrimary: '#546e7a',
+    textSecondary: '#808080',
+    text: '#263238',
+    divider: '#d3d3d3',
+    iconBackground: '#dddddd',
+    primary: '#2196f3',
+    primaryPressed: '#1e88e5',
+    onPrimary: '#ffffff',
+    danger: '#f44336',
+    dangerPressed: '#be2626',
+    warning: '#ff8c00',
+    warningBackground: '#fff3e0',
+    errorBackground: '#ffebee',
+    overlay: 'rgba(0, 0, 0, 0.5)',
+    selected: 'rgba(33, 150, 243, 0.16)',
+    snackbar: '#323232',
+    onSnackbar: 'rgba(255, 255, 255, 0.87)',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    background: '#141d24',
+    altBackground: '#283136',
+    surfacePrimary: '#20292f',
+    surfaceSecondary: '#3a4147',
+    textPrimary: 'rgba(255, 255, 255, 0.87)',
+    textSecondary: 'rgba(255, 255, 255, 0.6)',
+    text: 'rgba(255, 255, 255, 0.87)',
+    divider: 'rgba(255, 255, 255, 0.12)',
+    iconBackground: '#1e1f20',
+    primary: '#2196f3',
+    primaryPressed: '#1e88e5',
+    onPrimary: '#ffffff',
+    danger: '#f44336',
+    dangerPressed: '#be2626',
+    warning: '#ffb74d',
+    warningBackground: '#3e2c12',
+    errorBackground: '#3b1d1d',
+    overlay: 'rgba(0, 0, 0, 0.6)',
+    selected: 'rgba(33, 150, 243, 0.24)',
+    snackbar: '#3a4147',
+    onSnackbar: 'rgba(255, 255, 255, 0.87)',
   },
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeColors = { [K in keyof typeof Colors.light]: string };
+export type ThemeColor = keyof ThemeColors;
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+/** File-type icon colors from upstream `--icon-*` variables. */
+export const IconColors = {
+  folder: '#2196f3',
+  image: '#4caf50',
+  video: '#ff6f00',
+  audio: '#9b59b6',
+  pdf: '#d23b4a',
+  archive: '#a52a2a',
+  code: '#1d99f3',
+  text: '#808080',
+  document: '#1d99f3',
+  other: '#808080',
+} as const;
 
 export const Spacing = {
   half: 2,
@@ -61,5 +79,9 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+/** Upstream `--borderRadius: 0.85rem`. */
+export const Radius = {
+  small: 6,
+  medium: 13.6,
+  pill: 999,
+} as const;

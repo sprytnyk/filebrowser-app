@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# app code, even where a global gitignore excludes lib/ directories
+!/src/lib/
