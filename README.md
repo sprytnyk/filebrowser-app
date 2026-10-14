@@ -28,6 +28,8 @@ stay in the web UI.
 - **View** images, video and audio in the app. Other files open in the app of your choice.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
   manage your shares in one list.
+- **Storage.** Settings shows how much each source holds and how much free space is left on its
+  disk.
 - **Transfers.** A tab with progress, speed and history for uploads and downloads, with cancel
   and retry. Transfers keep going when you switch servers.
 - **Screen lock** with fingerprint, face or device PIN. It locks again after a delay you choose.
@@ -96,6 +98,7 @@ self-hosted server over HTTPS. That covered:
 - adding servers, with and without a subpath, and switching between them
 - password sign-in and two-factor codes
 - browsing several sources, thumbnails, list and grid views
+- the used and free space shown for each source
 - creating, renaming, moving, copying and deleting files and folders, including bulk actions
 - uploads from the file picker and the gallery, including while switching servers
 - folder uploads with subfolders
