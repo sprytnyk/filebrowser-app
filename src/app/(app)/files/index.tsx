@@ -1,9 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
 import { Redirect, router, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
-import { getSources } from '@/api/users';
+import { SourceUsage } from '@/components/files/source-usage';
 import { ServerSwitchButton, useServerName } from '@/components/servers/server-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -13,20 +12,15 @@ import { Icon } from '@/components/ui/icon';
 import { ToastHost } from '@/components/ui/toast-host';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatSize } from '@/lib/files';
+import { useSources } from '@/hooks/use-sources';
 import { errorMessage } from '@/lib/notify';
-import { useSelf } from '@/session/session';
 
 /** Lists the user's sources; with only one, goes straight into it. */
 export default function SourcesScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const self = useSelf();
-  const sources = useQuery({ queryKey: ['sources'], queryFn: getSources });
+  const { sources, self, visible } = useSources();
   const serverName = useServerName();
-
-  const allowed = new Set(self.data?.scopes.map((s) => s.name) ?? []);
-  const visible = (sources.data ?? []).filter((s) => allowed.size === 0 || allowed.has(s.name));
 
   if (visible.length === 1) {
     return <Redirect href={{ pathname: '/files/[source]', params: { source: visible[0].name } }} />;
@@ -78,13 +72,9 @@ export default function SourcesScreen() {
               { backgroundColor: pressed ? theme.surfaceSecondary : theme.surfacePrimary },
             ]}>
             <Icon name="storage" color={theme.primary} size={32} />
-            <View style={styles.flex}>
+            <View style={[styles.flex, styles.cardText]}>
               <ThemedText type="smallBold">{item.name}</ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                {item.total > 0
-                  ? `${formatSize(item.used)} / ${formatSize(item.total)}`
-                  : formatSize(item.used)}
-              </ThemedText>
+              <SourceUsage source={item} />
             </View>
             {item.readOnly ? (
               <ThemedText type="caption" themeColor="textSecondary">
@@ -111,4 +101,5 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Radius.medium,
   },
+  cardText: { gap: Spacing.one },
 });

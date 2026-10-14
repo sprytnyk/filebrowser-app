@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import * as authApi from '@/api/auth';
+import { SourceUsage } from '@/components/files/source-usage';
 import { useProfileSubtitle, useRemoveServer } from '@/components/servers/server-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -16,6 +17,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { TextPrompt } from '@/components/ui/text-prompt';
 import { ToastHost } from '@/components/ui/toast-host';
 import { Radius, Spacing } from '@/constants/theme';
+import { useSources } from '@/hooks/use-sources';
 import { useTheme } from '@/hooks/use-theme';
 import { isPlainHttp } from '@/lib/url';
 import { authenticate, canUseScreenLock } from '@/lock/lock-state';
@@ -44,6 +46,7 @@ export default function SettingsScreen() {
   const profileSubtitle = useProfileSubtitle();
   const removeServerAsk = useRemoveServer();
   const { data: self } = useSelf();
+  const storage = useSources().visible;
   const prefs = usePrefs();
   const [lockAvailable, setLockAvailable] = useState<boolean | null>(null);
   const menu = useActionSheet();
@@ -134,6 +137,19 @@ export default function SettingsScreen() {
             <Banner kind="warning" message={t('mobile.httpWarning')} />
           ) : null}
         </Section>
+
+        {storage.length > 0 ? (
+          <Section title={t('mobile.storage')}>
+            {storage.map((source) => (
+              <Row
+                key={source.name}
+                icon="storage"
+                title={source.name}
+                detail={<SourceUsage source={source} />}
+              />
+            ))}
+          </Section>
+        ) : null}
 
         <Section title={t('mobile.account')}>
           <Row
@@ -250,23 +266,25 @@ type RowProps = {
   icon: IconName;
   title: string;
   subtitle?: string;
+  detail?: ReactNode;
   onPress?: () => void;
   chevron?: boolean;
   trailing?: ReactNode;
 };
 
-function Row({ icon, title, subtitle, onPress, chevron, trailing }: RowProps) {
+function Row({ icon, title, subtitle, detail, onPress, chevron, trailing }: RowProps) {
   const theme = useTheme();
   const content = (
     <>
       <Icon name={icon} color={theme.textPrimary} />
-      <View style={styles.flex}>
+      <View style={[styles.flex, detail ? styles.detail : null]}>
         <ThemedText numberOfLines={1}>{title}</ThemedText>
         {subtitle ? (
           <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
             {subtitle}
           </ThemedText>
         ) : null}
+        {detail}
       </View>
       {trailing}
       {chevron ? <Icon name="chevron_right" color={theme.textSecondary} /> : null}
@@ -297,6 +315,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     minHeight: 56,
   },
+  detail: { gap: Spacing.one },
   actions: { gap: Spacing.two },
   about: { textAlign: 'center' },
 });

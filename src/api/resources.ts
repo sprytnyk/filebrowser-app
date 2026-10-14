@@ -21,6 +21,7 @@ export function toListing(raw: RawListing): Listing {
     source: raw.source,
     path: dir,
     name: raw.name,
+    size: raw.size,
     items: [
       ...(raw.folders ?? []).map((f) => toItem(f, true)),
       ...(raw.files ?? []).map((f) => toItem(f, false)),

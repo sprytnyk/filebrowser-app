@@ -37,7 +37,10 @@ export type SourceInfo = {
   readOnly: boolean;
   private: boolean;
   status: string;
+  /** Size of the indexed files. */
   used: number;
+  /** Used space on the source's whole filesystem (total minus available, like df). */
+  usedAlt?: number;
   total: number;
   numFiles: number;
   numDirs: number;
@@ -71,6 +74,8 @@ export type Listing = {
   source: string;
   path: string;
   name: string;
+  /** Size of the folder with everything in it. */
+  size: number;
   items: FileItem[];
 };
 
