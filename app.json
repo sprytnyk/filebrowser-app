@@ -9,13 +9,23 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "dev.sprytnyk.filebrowser",
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#141D24",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": ["android.permission.RECORD_AUDIO", "android.permission.CAMERA"]
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -32,8 +42,20 @@
         }
       ],
       "expo-secure-store",
-      "expo-video",
-      "expo-audio",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-sharing",
       [
         "expo-build-properties",
