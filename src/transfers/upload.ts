@@ -85,9 +85,23 @@ class UploadHttpError extends Error {
  * completes or sits idle for 30 minutes, so a retry after a failure must reuse the old
  * session to take over its lock (and its partial temp file) instead of getting 409. They're
  * stored, so this also works after the app was closed or restarted mid-upload.
+ *
+ * The server keeps the partial file and writes each chunk at its offset, so a later upload
+ * of the same file resumes after the last chunk it confirmed (`offset`). Only within the
+ * lock window: while the lock is ours, nothing else can finish an upload to that path.
  */
 const SESSION_IDLE_MS = 30 * 60 * 1000;
-type Sessions = Record<string, { id: string; at: number }>;
+type Session = {
+  id: string;
+  /** Last successful chunk (or start), epoch ms. */
+  at: number;
+  /** Bytes the server has confirmed. */
+  offset?: number;
+  /** Size and content sample of the file being sent, to resume only the same file. */
+  size?: number;
+  sample?: string;
+};
+type Sessions = Record<string, Session>;
 
 function loadSessions(): Sessions {
   const now = Date.now();
@@ -102,14 +116,23 @@ function saveSessions(all: Sessions) {
   writeJson(StorageKeys.uploadSessions, Object.keys(all).length > 0 ? all : null);
 }
 
-/** The session for `key`, created if needed; also marks it as just used. */
-function sessionFor(key: string) {
+/** The session for `key`, created if needed (and then without progress). */
+function sessionFor(key: string): Session {
   const all = loadSessions();
-  const id =
-    all[key]?.id ?? `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-  all[key] = { id, at: Date.now() };
+  const session = all[key] ?? {
+    id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+    at: Date.now(),
+  };
+  all[key] = session;
   saveSessions(all);
-  return id;
+  return session;
+}
+
+function updateSession(key: string, patch: Partial<Session>) {
+  const all = loadSessions();
+  if (!all[key]) return;
+  all[key] = { ...all[key], ...patch, at: Date.now() };
+  saveSessions(all);
 }
 
 function endSession(key: string) {
@@ -193,6 +216,19 @@ async function postOnce(
   }
 }
 
+const SAMPLE_BYTES = 64 * 1024;
+
+/** FNV-1a over the file's first bytes: cheap, and enough to tell a different file apart. */
+function sampleOf(handle: FileHandle): string {
+  handle.offset = 0;
+  const bytes = handle.readBytes(SAMPLE_BYTES);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) {
+    hash = Math.imul(hash ^ bytes[i], 0x01000193);
+  }
+  return `${bytes.length}:${(hash >>> 0).toString(16)}`;
+}
+
 /**
  * Sends a file in `chunkSizeMb` pieces with the backend's chunk headers
  * (X-File-Upload-Session / X-File-Chunk-Offset / X-File-Total-Size), staging each piece in
@@ -215,7 +251,17 @@ async function uploadChunked(id: string, picked: PickedFile, target: UploadTarge
       source = local;
     }
     handle = source.open(FileMode.ReadOnly);
-    let offset = 0;
+    const sample = sampleOf(handle);
+    // Resume after what the server already has, if this is the same file as last time.
+    const same = session.size === picked.size && session.sample === sample;
+    let offset = same && session.offset && session.offset < picked.size ? session.offset : 0;
+    if (!same) updateSession(sessionKey, { size: picked.size, sample, offset: 0 });
+    handle.offset = offset;
+    if (offset > 0) {
+      // Not counted as transfer speed.
+      updateTransfer(id, { loaded: offset, lastSampleLoaded: offset });
+    }
+    let restarted = false;
     while (offset < picked.size) {
       if (getTransfer(id)?.status === 'cancelled') return;
       const bytes = handle.readBytes(Math.min(chunkSize, picked.size - offset));
@@ -223,21 +269,37 @@ async function uploadChunked(id: string, picked: PickedFile, target: UploadTarge
       const chunk = new File(stage, `${offset}.part`);
       chunk.write(bytes);
       const start = offset;
-      await postBody(
-        id,
-        (base) => `${uploadUrl(target.source, path, target.overwrite, base)}&_chunkSeq=${start}`,
-        chunk,
-        {
-          'X-File-Upload-Session': session,
-          'X-File-Chunk-Offset': String(start),
-          'X-File-Total-Size': String(picked.size),
-        },
-        (sent) => updateTransfer(id, { loaded: start + sent }),
-        (cancel) => updateTransfer(id, { cancel }),
-      );
+      try {
+        await postBody(
+          id,
+          (base) => `${uploadUrl(target.source, path, target.overwrite, base)}&_chunkSeq=${start}`,
+          chunk,
+          {
+            'X-File-Upload-Session': session.id,
+            'X-File-Chunk-Offset': String(start),
+            'X-File-Total-Size': String(picked.size),
+          },
+          (sent) => updateTransfer(id, { loaded: start + sent }),
+          (cancel) => updateTransfer(id, { cancel }),
+        );
+      } catch (e) {
+        // The server rejected the assembled file (its partial file held other bytes, e.g. a
+        // longer earlier file at this path, and it dropped it on the final size check):
+        // start over once, in the same session.
+        if (!restarted && e instanceof UploadHttpError && e.status === 400) {
+          chunk.delete();
+          restarted = true;
+          offset = 0;
+          handle.offset = 0;
+          updateSession(sessionKey, { offset: 0 });
+          updateTransfer(id, { loaded: 0 });
+          continue;
+        }
+        throw e;
+      }
       chunk.delete();
-      sessionFor(sessionKey);
       offset += bytes.length;
+      updateSession(sessionKey, { offset });
       updateTransfer(id, { loaded: offset });
     }
     endSession(sessionKey);
