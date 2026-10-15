@@ -236,6 +236,14 @@
     "durationHours": "{h} год {m} хв",
     "durationMinutes": "{m} хв {s} с",
     "durationMinutesOnly": "{m} хв",
-    "durationSeconds": "{s} с"
+    "durationSeconds": "{s} с",
+    "gatewayTitle": "Вхід на сервер",
+    "gatewayHint": "Цей сервер захищено сторінкою входу. Увійдіть, щоб продовжити.",
+    "gatewaySignOutHint": "Вихід зі сторінки входу сервера. Натисніть «Готово», коли він завершиться.",
+    "gatewayLogin": "Вхід на цей сервер виконується через його власну сторінку входу.",
+    "gatewayBlocked": "Сторінка входу сервера заблокувала цей запит. Увійдіть знову й повторіть.",
+    "gatewayContinue": "Продовжити",
+    "gatewayDone": "Готово",
+    "gatewayLoadFailed": "Не вдалося завантажити сторінку входу."
   }
 }

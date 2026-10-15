@@ -113,9 +113,13 @@ export type ServerGlobals = {
   minSearchLength: number;
   passwordMinLength: number;
   mediaAvailable: boolean;
+  /** Proxy auth: the server takes the username from a header set by a gateway in front of it. */
+  proxyAvailable: boolean;
 };
 
 export type ServerInfo = ServerGlobals & {
   /** Normalized base URL without a trailing slash. */
   baseUrl: string;
+  /** Requests have to pass a sign-in gateway (forward auth) first. */
+  gateway?: boolean;
 };

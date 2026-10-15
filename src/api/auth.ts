@@ -1,4 +1,4 @@
-import { ApiError, request } from '@/api/client';
+import { ApiError, request, requestJson } from '@/api/client';
 
 export type LoginFailure =
   | 'invalidCredentials'
@@ -37,6 +37,24 @@ export async function login({ baseUrl, username, password, otp }: Credentials): 
   return (await res.text()).trim();
 }
 
+/**
+ * Signs in as the user a sign-in gateway vouches for (proxy auth): the backend reads the username
+ * from the gateway's header, so no credentials are sent. Returns the token and the username.
+ */
+export async function loginViaGateway(
+  baseUrl: string,
+): Promise<{ token: string; username: string }> {
+  const res = await request('auth/login', { method: 'POST', baseUrl, auth: false });
+  const token = (await res.text()).trim();
+  const self = await requestJson<{ username: string }>('users', {
+    baseUrl,
+    auth: false,
+    params: { username: 'self' },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { token, username: self.username };
+}
+
 /** For accounts flagged "require password change"; answers with a session token like login. */
 export async function changeRequiredPassword(
   creds: Credentials & { newPassword: string },
@@ -68,11 +86,21 @@ export async function renew(target?: Target): Promise<string> {
   return (await res.text()).trim();
 }
 
-/** Revokes a token server-side. Errors are ignored: the app forgets the token anyway. */
-export async function logout(target?: Target): Promise<void> {
+/**
+ * Revokes a token server-side. Errors are ignored: the app forgets the token anyway. Returns the
+ * absolute sign-out URL the server names for gateway (proxy) users, if any.
+ */
+export async function logout(target?: Target): Promise<string | null> {
   try {
-    await request('auth/logout', { method: 'POST', timeoutMs: 5_000, ...targetOptions(target) });
+    const res = await request('auth/logout', {
+      method: 'POST',
+      timeoutMs: 5_000,
+      ...targetOptions(target),
+    });
+    const body = (await res.json()) as { logoutUrl?: string };
+    return body.logoutUrl && /^https?:\/\//.test(body.logoutUrl) ? body.logoutUrl : null;
   } catch {
     // Offline or already expired.
+    return null;
   }
 }

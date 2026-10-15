@@ -2,9 +2,10 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, type FileHandle, FileMode, Paths, UploadType } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 
-import { messageFromBody, NetworkError } from '@/api/client';
+import { GatewayError, messageFromBody, NetworkError } from '@/api/client';
 import { uploadUrl } from '@/api/resources';
 import i18n from '@/i18n';
+import { isGatewayUploadResult } from '@/lib/gateway';
 import { errorMessage } from '@/lib/notify';
 import { joinPath } from '@/lib/url';
 import { withLockSuspended } from '@/lock/lock-state';
@@ -264,6 +265,8 @@ async function postOnce(
   register: (cancel: () => void) => void,
 ) {
   const creds = transferCredentials(id);
+  // Without the gateway's cookie the body would only be sent to its sign-in page.
+  if (creds.gateway && !creds.headers.Cookie) throw new GatewayError();
   const task = file.createUploadTask(url(creds.baseUrl), {
     httpMethod: 'POST',
     uploadType: UploadType.BINARY_CONTENT,
@@ -278,6 +281,10 @@ async function postOnce(
       result = await task.uploadAsync();
     } catch (e) {
       throw networkError(e);
+    }
+    // Redirects are followed, so a gateway sign-in page shows up as a 200 with HTML.
+    if (creds.gateway && isGatewayUploadResult(result.status, result.headers)) {
+      throw new GatewayError();
     }
     if (result.status < 200 || result.status >= 300) {
       throw new UploadHttpError(result.status, result.body);

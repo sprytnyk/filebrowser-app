@@ -1,6 +1,6 @@
 import { ToastAndroid } from 'react-native';
 
-import { ApiError, NetworkError } from '@/api/client';
+import { ApiError, GatewayError, NetworkError } from '@/api/client';
 import i18n from '@/i18n';
 import { ask } from '@/lib/dialog';
 import { showToast, type ToastAction } from '@/lib/toast';
@@ -14,6 +14,7 @@ export function errorMessage(e: unknown): string {
   if (e instanceof NetworkError) {
     return e.timedOut ? i18n.t('errors.requestTimedOut') : i18n.t('errors.connection');
   }
+  if (e instanceof GatewayError) return i18n.t('mobile.gatewayBlocked');
   if (e instanceof ApiError) {
     if (e.status === 403) return i18n.t('errors.forbidden');
     if (e.status === 404) return i18n.t('errors.notFound');

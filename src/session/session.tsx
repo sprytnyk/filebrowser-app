@@ -17,6 +17,7 @@ import { fetchGlobals, isSupportedVersion } from '@/api/server';
 import { type ServerInfo, type User } from '@/api/types';
 import { getSelf } from '@/api/users';
 import i18n from '@/i18n';
+import { gatewaySignInOpen, openGatewaySignIn, openGatewaySignOut } from '@/lib/gateway';
 import { shouldRenew } from '@/lib/jwt';
 import { showMessage } from '@/lib/notify';
 import {
@@ -27,6 +28,7 @@ import {
   profileName,
   removeProfile,
   type ServerProfile,
+  markGateway,
   setActive,
   setToken,
   tokenFor,
@@ -45,6 +47,11 @@ type SessionContextValue = {
   switching: boolean;
   /** One-shot message for the login screen, e.g. "session expired". */
   notice: string | null;
+  /**
+   * Whether the login screen may sign in through a gateway by itself. Off after an explicit sign
+   * out, so the user isn't signed straight back in.
+   */
+  gatewayAuto: boolean;
   /** Adds a probed server and makes it active (signed out until login). */
   connect: (server: ServerInfo, label?: string | null) => void;
   startAdding: () => void;
@@ -67,6 +74,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const server = active?.server ?? null;
   const token = active ? (tokens[active.id] ?? null) : null;
   const [notice, setNotice] = useState<string | null>(null);
+  const [gatewayAuto, setGatewayAuto] = useState(true);
   const [adding, setAdding] = useState(false);
   // Changing servers happens in two renders: first the signed-in screens are taken off the
   // stack (dropping the old server's folders and tabs), then the new server becomes active.
@@ -84,10 +92,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     async (message?: string) => {
       const current = activeProfile();
       if (!current) return;
-      await authApi.logout();
+      const logoutUrl = await authApi.logout();
       setToken(current.id, null);
       queryClient.clear();
       setNotice(message ?? null);
+      setGatewayAuto(false);
+      // End the gateway's session too, or the next sign-in would skip its login page.
+      if (current.server.gateway && logoutUrl) {
+        setTimeout(() => openGatewaySignOut(logoutUrl), 0);
+      }
     },
     [queryClient],
   );
@@ -99,9 +112,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setNotice(i18n.t('mobile.sessionExpired'));
   }, [queryClient]);
 
+  // The gateway's own session ran out mid-use: show its sign-in page, then refresh. Backing out
+  // holds off asking again for a minute, so a screen full of requests doesn't keep reopening it.
+  const gatewayQuietUntil = useRef(0);
+  const onGateway = useCallback(() => {
+    const current = activeProfile();
+    if (!current || gatewaySignInOpen() || Date.now() < gatewayQuietUntil.current) return;
+    markGateway(current.id);
+    void openGatewaySignIn(current.server.baseUrl).then((ok) => {
+      if (ok) void queryClient.invalidateQueries();
+      else gatewayQuietUntil.current = Date.now() + 60_000;
+    });
+  }, [queryClient]);
+
   useEffect(() => {
-    configureApi({ onUnauthorized: expireSession });
-  }, [expireSession]);
+    configureApi({ onUnauthorized: expireSession, onGateway });
+  }, [expireSession, onGateway]);
 
   const connect = useCallback(
     (next: ServerInfo, label: string | null = null) => {
@@ -109,6 +135,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       addProfile(next, label);
       setAdding(false);
       setNotice(null);
+      setGatewayAuto(true);
     },
     [queryClient],
   );
@@ -121,6 +148,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         queryClient.clear();
         setActive(id);
         setNotice(tokenFor(id) ? null : i18n.t('mobile.signedOutOfServer'));
+        setGatewayAuto(true);
       });
     },
     [queryClient],
@@ -152,6 +180,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const current = activeProfile();
     if (!current) return;
     setNotice(null);
+    setGatewayAuto(true);
     // Signing in to the same account again replaces its older profile.
     for (const p of getServers().profiles) {
       if (
@@ -227,6 +256,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       adding,
       switching: pendingSwitch !== null,
       notice,
+      gatewayAuto,
       connect,
       startAdding,
       cancelAdding,
@@ -243,6 +273,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       adding,
       pendingSwitch,
       notice,
+      gatewayAuto,
       connect,
       startAdding,
       cancelAdding,

@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BackHandler } from 'react-native';
 
-import { NetworkError } from '@/api/client';
+import { GatewayError, NetworkError } from '@/api/client';
 import { NotFilebrowserError, probeServer } from '@/api/server';
 import { type ServerInfo } from '@/api/types';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { FormScreen } from '@/components/ui/form-screen';
 import { TextField } from '@/components/ui/text-field';
+import { openGatewaySignIn } from '@/lib/gateway';
 import { isPlainHttp, normalizeServerUrl } from '@/lib/url';
 import { normalizeLabel } from '@/session/servers';
 import { useSession } from '@/session/session';
@@ -33,6 +34,16 @@ export default function ServerScreen() {
     return () => sub.remove();
   }, [adding, cancelAdding]);
 
+  /** A sign-in gateway in front of the server gets its login page first, then a second probe. */
+  async function probeOrSignIn(baseUrl: string): Promise<ServerInfo> {
+    try {
+      return await probeServer(baseUrl);
+    } catch (e) {
+      if (!(e instanceof GatewayError) || !(await openGatewaySignIn(baseUrl))) throw e;
+      return { ...(await probeServer(baseUrl)), gateway: true };
+    }
+  }
+
   async function submit() {
     if (pendingHttp) {
       connect(pendingHttp, normalizeLabel(name, pendingHttp));
@@ -46,7 +57,7 @@ export default function ServerScreen() {
     setBusy(true);
     setError(null);
     try {
-      const info = await probeServer(baseUrl);
+      const info = await probeOrSignIn(baseUrl);
       if (isPlainHttp(info.baseUrl)) {
         setInput(info.baseUrl);
         setPendingHttp(info);
@@ -54,7 +65,8 @@ export default function ServerScreen() {
         connect(info, normalizeLabel(name, info));
       }
     } catch (e) {
-      if (e instanceof NotFilebrowserError) setError(t('mobile.notFilebrowser'));
+      if (e instanceof GatewayError) setError(t('mobile.gatewayBlocked'));
+      else if (e instanceof NotFilebrowserError) setError(t('mobile.notFilebrowser'));
       else if (e instanceof NetworkError)
         setError(e.timedOut ? t('errors.requestTimedOut') : t('errors.connection'));
       else setError(t('prompts.error'));

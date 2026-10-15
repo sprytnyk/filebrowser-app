@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { GatewayError, request } from '@/api/client';
 import { archiveUrl, rawUrl } from '@/api/resources';
 import { type FileItem } from '@/api/types';
 import i18n from '@/i18n';
@@ -52,11 +53,23 @@ function scratchDir(id: string): Directory {
   return dir;
 }
 
+/**
+ * Behind a sign-in gateway, a download without its session would save the gateway's login page
+ * as the file. Check the session (fetch shares it) and that the cookie can be passed on first.
+ */
+async function checkGateway(creds: ReturnType<typeof transferCredentials>) {
+  if (!creds.gateway) return;
+  if (!creds.headers.Cookie) throw new GatewayError();
+  await request('health', { baseUrl: creds.baseUrl, auth: false });
+}
+
 /** Streams a URL into the app cache with progress; null when cancelled. */
 async function fetchToCache(id: string, url: string, name: string): Promise<File | null> {
+  const creds = transferCredentials(id);
+  await checkGateway(creds);
   const dest = new File(scratchDir(id), name);
   const task = File.createDownloadTask(url, dest, {
-    headers: transferCredentials(id).headers,
+    headers: creds.headers,
     onProgress: ({ bytesWritten, totalBytes }) => {
       updateTransfer(id, { loaded: bytesWritten, total: totalBytes > 0 ? totalBytes : 0 });
     },

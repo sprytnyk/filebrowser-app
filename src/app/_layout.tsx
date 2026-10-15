@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { ApiError } from '@/api/client';
+import { ApiError, GatewayError } from '@/api/client';
 import { DialogHost } from '@/components/ui/dialog-host';
 import { Colors } from '@/constants/theme';
 import { useIsDark } from '@/hooks/use-theme';
@@ -29,7 +29,10 @@ function makeQueryClient() {
     defaultOptions: {
       queries: {
         // 4xx answers won't change on retry; network blips might.
-        retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 2,
+        retry: (count, error) =>
+          !(error instanceof ApiError && error.status < 500) &&
+          !(error instanceof GatewayError) &&
+          count < 2,
         staleTime: 30 * 1000,
       },
     },
@@ -61,6 +64,8 @@ function RootStack() {
       <Stack screenOptions={{ headerShadowVisible: false }}>
         {/* Always available: the start URL, and where the guards fall back to. */}
         <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
+        {/* A sign-in gateway's page can be needed both before and after signing in. */}
+        <Stack.Screen name="gateway" options={{ presentation: 'modal' }} />
         <Stack.Protected guard={switching}>
           <Stack.Screen name="switching" options={{ headerShown: false, animation: 'none' }} />
         </Stack.Protected>

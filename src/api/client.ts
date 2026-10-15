@@ -1,3 +1,4 @@
+import { gatewayHeaders, isGatewayResponse } from '@/lib/gateway';
 import { buildQuery, type QueryValue } from '@/lib/url';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -25,13 +26,31 @@ export class NetworkError extends Error {
   }
 }
 
+/** A sign-in gateway in front of the server answered instead of the backend. */
+export class GatewayError extends Error {
+  constructor() {
+    super('The server is behind a sign-in page');
+    this.name = 'GatewayError';
+  }
+}
+
 type ApiState = {
   baseUrl: string | null;
   token: string | null;
+  /** The active server sits behind a sign-in gateway. */
+  gateway: boolean;
   onUnauthorized: (() => void) | null;
+  /** The gateway turned away a request to the active server; its session needs renewing. */
+  onGateway: (() => void) | null;
 };
 
-const state: ApiState = { baseUrl: null, token: null, onUnauthorized: null };
+const state: ApiState = {
+  baseUrl: null,
+  token: null,
+  gateway: false,
+  onUnauthorized: null,
+  onGateway: null,
+};
 
 /** Called by the session provider whenever the server or token changes. */
 export function configureApi(next: Partial<ApiState>) {
@@ -52,8 +71,12 @@ export function apiUrl(path: string, params?: Record<string, QueryValue>, base =
   return `${base}/api/${path.replace(/^\/+/, '')}${buildQuery(params)}`;
 }
 
+/** Headers for requests to the active server, including ones made outside fetch (media). */
 export function authHeaders(): Record<string, string> {
-  return state.token ? { Authorization: `Bearer ${state.token}` } : {};
+  return {
+    ...(state.gateway && state.baseUrl ? gatewayHeaders(state.baseUrl) : {}),
+    ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}),
+  };
 }
 
 export type RequestOptions = {
@@ -123,10 +146,11 @@ export async function request(path: string, opts: RequestOptions = {}): Promise<
     body = JSON.stringify(json);
   }
 
+  const base = opts.baseUrl ?? getBaseUrl();
   const timer = timeoutSignal(timeoutMs, signal);
   let res: Response;
   try {
-    res = await fetch(apiUrl(path, params, opts.baseUrl), {
+    res = await fetch(apiUrl(path, params, base), {
       method,
       headers,
       body,
@@ -143,6 +167,10 @@ export async function request(path: string, opts: RequestOptions = {}): Promise<
     timer.dispose();
   }
 
+  if (isGatewayResponse(res, base)) {
+    if (!opts.baseUrl) state.onGateway?.();
+    throw new GatewayError();
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     if (res.status === 401 && auth && state.token && opts.sessionOn401 !== false) {

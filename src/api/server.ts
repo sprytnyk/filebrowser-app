@@ -10,6 +10,7 @@ export const DEFAULT_GLOBALS: ServerGlobals = {
   minSearchLength: 3,
   passwordMinLength: 5,
   mediaAvailable: false,
+  proxyAvailable: false,
 };
 
 export class NotFilebrowserError extends Error {
@@ -42,13 +43,17 @@ export async function fetchGlobals(baseUrl: string, token?: string): Promise<Ser
       minSearchLength: raw.minSearchLength || DEFAULT_GLOBALS.minSearchLength,
       passwordMinLength: raw.passwordMinLength || DEFAULT_GLOBALS.passwordMinLength,
       mediaAvailable: raw.mediaAvailable ?? false,
+      proxyAvailable: raw.proxyAvailable ?? false,
     };
   } catch {
     return DEFAULT_GLOBALS;
   }
 }
 
-/** Confirms a FileBrowser backend answers at `baseUrl`, then reads its public settings. */
+/**
+ * Confirms a FileBrowser backend answers at `baseUrl`, then reads its public settings. Throws
+ * GatewayError when a sign-in gateway answers instead.
+ */
 export async function probeServer(baseUrl: string): Promise<ServerInfo> {
   let body: { message?: string };
   try {

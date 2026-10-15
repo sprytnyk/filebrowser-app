@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { configureApi } from '@/api/client';
 import { type ServerInfo } from '@/api/types';
 import i18n from '@/i18n';
+import { gatewayHeaders } from '@/lib/gateway';
 import { isExpired } from '@/lib/jwt';
 import { readJson, StorageKeys, tokenKey, writeJson } from '@/session/storage';
 
@@ -62,6 +63,7 @@ function syncApi() {
   configureApi({
     baseUrl: active?.server.baseUrl ?? null,
     token: active ? (state.tokens[active.id] ?? null) : null,
+    gateway: !!active?.server.gateway,
   });
 }
 syncApi();
@@ -114,6 +116,13 @@ export function updateProfile(id: string, patch: Partial<Omit<ServerProfile, 'id
   });
 }
 
+/** Remembers that a server turned out to be behind a sign-in gateway. */
+export function markGateway(id: string) {
+  const profile = state.profiles.find((p) => p.id === id);
+  if (!profile || profile.server.gateway) return;
+  updateProfile(id, { server: { ...profile.server, gateway: true } });
+}
+
 /** Forgets a profile and its token; the next remaining profile becomes active. */
 export function removeProfile(id: string) {
   writeJson(tokenKey(id), null);
@@ -136,11 +145,20 @@ export function setActive(id: string) {
 }
 
 /** Address and auth header for a profile, for work that must stay on its server (transfers). */
-export function credentialsFor(id: string): { baseUrl: string; headers: Record<string, string> } {
+export function credentialsFor(id: string): {
+  baseUrl: string;
+  headers: Record<string, string>;
+  gateway: boolean;
+} {
   const profile = state.profiles.find((p) => p.id === id);
   const token = state.tokens[id];
   if (!profile || !token) throw new Error(i18n.t('mobile.signedOutOfServer'));
-  return { baseUrl: profile.server.baseUrl, headers: { Authorization: `Bearer ${token}` } };
+  const { baseUrl, gateway } = profile.server;
+  return {
+    baseUrl,
+    headers: { ...(gateway ? gatewayHeaders(baseUrl) : {}), Authorization: `Bearer ${token}` },
+    gateway: !!gateway,
+  };
 }
 
 /** The name shown for a server: the user's own label, else the name the server reports. */

@@ -1,15 +1,17 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type TextInput } from 'react-native';
 
 import * as authApi from '@/api/auth';
-import { NetworkError } from '@/api/client';
+import { GatewayError, NetworkError } from '@/api/client';
 import { useServerSwitcher } from '@/components/servers/server-switcher';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { FormScreen } from '@/components/ui/form-screen';
 import { TextField } from '@/components/ui/text-field';
-import { profileName } from '@/session/servers';
+import { openGatewaySignIn } from '@/lib/gateway';
+import { errorMessage } from '@/lib/notify';
+import { markGateway, profileName } from '@/session/servers';
 import { useServer, useSession } from '@/session/session';
 
 type Step = 'credentials' | 'otp' | 'changePassword';
@@ -17,7 +19,7 @@ type Step = 'credentials' | 'otp' | 'changePassword';
 export default function LoginScreen() {
   const { t } = useTranslation();
   const server = useServer();
-  const { signIn, notice, profiles, activeId } = useSession();
+  const { signIn, notice, profiles, activeId, gatewayAuto } = useSession();
   const active = profiles.find((p) => p.id === activeId);
   const switcher = useServerSwitcher({ withRemove: true });
 
@@ -40,6 +42,8 @@ export default function LoginScreen() {
   const passwordRef = useRef<TextInput>(null);
 
   const passwordLoginAvailable = server.passwordAvailable || server.ldapAvailable;
+  // Behind a gateway with proxy auth, the gateway's sign-in is the only one needed.
+  const viaGateway = !!server.gateway && server.proxyAvailable;
   const minLength = server.passwordMinLength;
 
   async function attemptLogin(code?: string) {
@@ -53,6 +57,10 @@ export default function LoginScreen() {
   }
 
   function explain(e: unknown) {
+    if (viaGateway || e instanceof GatewayError) {
+      setError(errorMessage(e));
+      return;
+    }
     if (e instanceof NetworkError) {
       setError(e.timedOut ? t('errors.requestTimedOut') : t('errors.connection'));
       return;
@@ -83,7 +91,15 @@ export default function LoginScreen() {
     setBusy(true);
     setError(null);
     try {
-      await action();
+      try {
+        await action();
+      } catch (e) {
+        // A gateway in front of the server wants its own sign-in first; then try once more.
+        if (!(e instanceof GatewayError)) throw e;
+        if (active) markGateway(active.id);
+        if (!(await openGatewaySignIn(server.baseUrl))) throw e;
+        await action();
+      }
     } catch (e) {
       explain(e);
     } finally {
@@ -92,6 +108,21 @@ export default function LoginScreen() {
   }
 
   const submitCredentials = () => run(() => attemptLogin());
+
+  const submitGateway = () =>
+    run(async () => {
+      const { token, username: name } = await authApi.loginViaGateway(server.baseUrl);
+      signIn(token, name);
+    });
+
+  // Sign in straight away when the gateway session is still good, once per server.
+  const autoTried = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!viaGateway || !gatewayAuto || autoTried.current === profileId) return;
+    autoTried.current = profileId;
+    void submitGateway();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per profile
+  }, [viaGateway, gatewayAuto, profileId]);
 
   const submitOtp = () => {
     if (!/^\d{6}$/.test(otp)) {
@@ -193,6 +224,29 @@ export default function LoginScreen() {
     );
   }
 
+  const switchButton = (
+    <Button
+      title={profiles.length > 1 ? t('mobile.switchServer') : t('mobile.changeServer')}
+      variant="flat"
+      onPress={switcher.open}
+    />
+  );
+
+  if (viaGateway) {
+    return (
+      <FormScreen
+        title={t('mobile.signInTo', { server: active ? profileName(active) : server.name })}
+        subtitle={subtitle}>
+        {notice ? <Banner kind="info" message={notice} /> : null}
+        <Banner kind="info" message={t('mobile.gatewayLogin')} />
+        {error ? <Banner kind="error" message={error} /> : null}
+        <Button title={t('mobile.gatewayContinue')} loading={busy} onPress={submitGateway} />
+        {switchButton}
+        {switcher.sheet}
+      </FormScreen>
+    );
+  }
+
   return (
     <FormScreen
       title={t('mobile.signInTo', { server: active ? profileName(active) : server.name })}
@@ -231,11 +285,7 @@ export default function LoginScreen() {
         disabled={username.trim() === '' || password === '' || !passwordLoginAvailable}
         onPress={submitCredentials}
       />
-      <Button
-        title={profiles.length > 1 ? t('mobile.switchServer') : t('mobile.changeServer')}
-        variant="flat"
-        onPress={switcher.open}
-      />
+      {switchButton}
       {switcher.sheet}
     </FormScreen>
   );

@@ -406,6 +406,14 @@
     "durationHours": "{h} h {m} min",
     "durationMinutes": "{m} min {s} s",
     "durationMinutesOnly": "{m} min",
-    "durationSeconds": "{s} s"
+    "durationSeconds": "{s} s",
+    "gatewayTitle": "Server sign-in",
+    "gatewayHint": "This server is behind a sign-in page. Sign in to continue.",
+    "gatewaySignOutHint": "Signing out of the server's sign-in page. Tap Done when it's finished.",
+    "gatewayLogin": "This server signs you in through its own sign-in page.",
+    "gatewayBlocked": "The server's sign-in page blocked this request. Sign in again and retry.",
+    "gatewayContinue": "Continue",
+    "gatewayDone": "Done",
+    "gatewayLoadFailed": "Couldn't load the sign-in page."
   }
 }
