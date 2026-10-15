@@ -29,7 +29,8 @@ stay in the web UI.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
   manage your shares in one list.
 - **Storage.** Settings shows how much each source holds and how much free space is left on its
-  disk.
+  disk, in red with a warning once the disk is almost full. Uploads that wouldn't fit are stopped
+  before they start, since the server doesn't check.
 - **Transfers.** A tab with progress, speed and history for uploads and downloads, with cancel
   and retry. Transfers keep going when you switch servers.
 - **Screen lock** with fingerprint, face or device PIN. It locks again after a delay you choose.
@@ -98,7 +99,8 @@ self-hosted server over HTTPS. That covered:
 - adding servers, with and without a subpath, and switching between them
 - password sign-in and two-factor codes
 - browsing several sources, thumbnails, list and grid views
-- the used and free space shown for each source
+- the used and free space shown for each source, the almost-full warning and uploads blocked on
+  a full disk
 - creating, renaming, moving, copying and deleting files and folders, including bulk actions
 - uploads from the file picker and the gallery, including while switching servers
 - folder uploads with subfolders
