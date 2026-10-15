@@ -118,6 +118,8 @@ self-hosted server over HTTPS. That covered:
 
 - adding servers, with and without a subpath, and switching between them
 - password sign-in and two-factor codes
+- signing in through a forward-auth sign-in page in front of the server (Traefik), including
+  expired sessions, with thumbnails, the viewer, uploads and downloads behind it
 - browsing several sources, thumbnails, list and grid views
 - the used and free space shown for each source, the almost-full warning and uploads blocked on
   a full disk
