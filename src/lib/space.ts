@@ -6,12 +6,12 @@ import { type SourceInfo } from '@/api/types';
 const LOW_SPACE_RATIO = 0.1;
 
 /**
- * Free bytes on the source's disk, or null when the server doesn't report it. The server
- * gives disk used as total minus available (like df), so this is df's "Avail".
+ * Free bytes on the source's disk, or null when the server doesn't report it (usage turned off
+ * leaves total at 0). The server gives disk used as total minus available (like df), so this is
+ * df's "Avail". An empty disk reports 0 used.
  */
 export function sourceFree(source: SourceInfo): number | null {
-  const usedAlt = source.usedAlt ?? 0;
-  return source.total > 0 && usedAlt > 0 ? Math.max(0, source.total - usedAlt) : null;
+  return source.total > 0 ? Math.max(0, source.total - (source.usedAlt ?? 0)) : null;
 }
 
 export function isLowSpace(source: SourceInfo): boolean {
@@ -28,8 +28,7 @@ export function adjustUsage(queryClient: QueryClient, source: string, delta: num
   queryClient.setQueryData<SourceInfo[]>(['sources'], (old) =>
     old?.map((s) =>
       s.name === source && sourceFree(s) !== null
-        ? // Stays above 0, which would read as "not reported".
-          { ...s, usedAlt: Math.min(s.total, Math.max(1, s.usedAlt! + delta)) }
+        ? { ...s, usedAlt: Math.min(s.total, Math.max(0, (s.usedAlt ?? 0) + delta)) }
         : s,
     ),
   );
