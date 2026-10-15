@@ -18,7 +18,8 @@ stay in the web UI.
 - **Several servers.** Add as many servers as you like, give each one your own name and switch
   between them. Each server keeps its own sign-in.
 - **Sign-in.** Password (including LDAP) and two-factor codes (TOTP). Servers that require a
-  password change on first login are handled too.
+  password change on first login are handled too. Servers behind a sign-in page on the reverse
+  proxy (forward auth, with FileBrowser's proxy auth) open that page in the app.
 - **Browse.** List or grid view, thumbnails, sort by name, size or date, and search.
 - **Manage files.** Create folders, rename, move, copy and delete, one at a time or several at
   once.
@@ -45,14 +46,14 @@ stay in the web UI.
 The app is built on the server's own API (the Go backend), the same one the web UI uses. It
 covers part of it:
 
-| Covered by the app                                                                                    | Left to the web UI                                                                                                               |
-| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Sign-in with password or LDAP, two-factor codes, required password change, session renewal and logout | Single sign-on (OIDC), proxy auth and passkeys                                                                                   |
-| Listing, creating, renaming, moving, copying and deleting files and folders                           | User management, access rules and server settings                                                                                |
-| Chunked uploads, single-file and zip downloads                                                        | Duplicate finder, size viewer, file watcher, activity log and advanced search                                                    |
-| Thumbnails, image viewer, video and audio playback                                                    | Built-in editors and viewers (text, Markdown, OnlyOffice, documents, EPUB, 3D). The app opens these files in another app instead |
-| Share links with expiry and password, listing and deleting your shares                                | Share customisation beyond expiry and password, API tokens, notifications, pinned items                                          |
-| Basic search, changing your own password                                                              | Other profile and display preferences                                                                                            |
+| Covered by the app                                                                                                                                       | Left to the web UI                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Sign-in with password or LDAP, two-factor codes, required password change, sign-in pages in front of the server (proxy auth), session renewal and logout | Single sign-on (OIDC) and passkeys                                                                                               |
+| Listing, creating, renaming, moving, copying and deleting files and folders                                                                              | User management, access rules and server settings                                                                                |
+| Chunked uploads, single-file and zip downloads                                                                                                           | Duplicate finder, size viewer, file watcher, activity log and advanced search                                                    |
+| Thumbnails, image viewer, video and audio playback                                                                                                       | Built-in editors and viewers (text, Markdown, OnlyOffice, documents, EPUB, 3D). The app opens these files in another app instead |
+| Share links with expiry and password, listing and deleting your shares                                                                                   | Share customisation beyond expiry and password, API tokens, notifications, pinned items                                          |
+| Basic search, changing your own password                                                                                                                 | Other profile and display preferences                                                                                            |
 
 ### Why it's kept simple
 
@@ -104,6 +105,8 @@ crash reporting.
 - The app only talks to the servers you add. Nothing goes to the app's developer or any third
   party.
 - Your session token is kept in Android's encrypted secure storage. Your password isn't stored.
+- For a server behind a sign-in page, that page's session cookie stays in the app's private web
+  storage, like in a browser.
 - Server addresses and settings stay on the device. Removing a server signs you out of it and
   forgets its address and session.
 
