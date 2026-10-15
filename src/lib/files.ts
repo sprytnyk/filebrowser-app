@@ -68,7 +68,13 @@ export function formatSize(bytes: number): string {
     value /= 1024;
     unit += 1;
   }
-  return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+  // One decimal below 100 so 10.6 GB doesn't read as 10 GB; "10.0" collapses to "10".
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  const number = value.toLocaleString(formatLocale(), {
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
+  return `${number} ${units[unit]}`;
 }
 
 export function formatDate(iso: string): string {
