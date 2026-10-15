@@ -158,6 +158,20 @@ export function getTransfer(id: string): Internal | undefined {
   return transfers.find((t) => t.id === id);
 }
 
+/** Bytes still to send by uploads queued or running into `source` on the active server. */
+export function pendingUploadBytes(source: string): number {
+  const serverId = activeProfile()?.id ?? '';
+  return transfers
+    .filter(
+      (t) =>
+        t.kind === 'upload' &&
+        isRunning(t) &&
+        t.serverId === serverId &&
+        t.target.startsWith(`${source}:`),
+    )
+    .reduce((sum, t) => sum + Math.max(0, t.total - t.loaded), 0);
+}
+
 /** Base URL and auth header of the server a transfer belongs to (throws once signed out). */
 export function transferCredentials(id: string) {
   return credentialsFor(getTransfer(id)?.serverId ?? '');

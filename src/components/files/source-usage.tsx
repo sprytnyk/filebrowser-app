@@ -9,11 +9,13 @@ import { type SourceInfo } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { formatSize } from '@/lib/files';
+import { isLowSpace, sourceFree } from '@/lib/space';
 
 /**
  * Space taken by the source's files against the free space left on its disk, e.g.
  * "80 KB used · 17 GB free". The disk's own used figure isn't shown: it counts the OS and
- * everything else on that filesystem, not just what's in the source.
+ * everything else on that filesystem, not just what's in the source. Both turn red when the
+ * disk is almost full.
  *
  * "Used" is the size of the source's root folder: the server's own usage figure is cached
  * and lags behind uploads and deletes, while the root listing is current.
@@ -32,9 +34,7 @@ export function SourceUsage({ source }: { source: SourceInfo }) {
     }, [refetch]),
   );
   const used = Math.max(0, root.data?.size ?? source.used);
-  // The server reports disk used as total minus available (like df), so this is df's "Avail".
-  const free =
-    source.total > 0 && (source.usedAlt ?? 0) > 0 ? source.total - source.usedAlt! : null;
+  const free = sourceFree(source);
   if (free === null) {
     return (
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
@@ -44,6 +44,7 @@ export function SourceUsage({ source }: { source: SourceInfo }) {
   }
   const capacity = used + free;
   const percent = capacity > 0 ? Math.min(100, (used / capacity) * 100) : 0;
+  const low = isLowSpace(source);
   return (
     <View style={styles.usage}>
       <View
@@ -54,11 +55,14 @@ export function SourceUsage({ source }: { source: SourceInfo }) {
         <View
           style={[
             styles.fill,
-            { width: `${used > 0 ? Math.max(percent, 1) : 0}%`, backgroundColor: theme.primary },
+            {
+              width: `${used > 0 ? Math.max(percent, 1) : 0}%`,
+              backgroundColor: low ? theme.danger : theme.primary,
+            },
           ]}
         />
       </View>
-      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+      <ThemedText type="caption" themeColor={low ? 'danger' : 'textSecondary'} numberOfLines={1}>
         {t('mobile.storageUsedFree', { used: formatSize(used), free: formatSize(free) })}
       </ThemedText>
     </View>

@@ -7,21 +7,38 @@ import * as resources from '@/api/resources';
 import { type FileItem } from '@/api/types';
 import { setPendingTransfer } from '@/lib/move-store';
 import { confirm, showError, toast } from '@/lib/notify';
+import { adjustUsage } from '@/lib/space';
 import { parentDir } from '@/lib/url';
 
+/**
+ * The server caches each source's disk usage for 30 s after computing it, so free space
+ * changed by a delete or upload only shows once that has expired.
+ */
+const USAGE_CACHE_MS = 31_000;
+let usageTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Refreshes listings after a change, and the sources' free space once the server has it. */
 export function useInvalidateListing() {
   const queryClient = useQueryClient();
   return useCallback(
-    (source?: string, path?: string) =>
-      queryClient.invalidateQueries({
+    (source?: string, path?: string) => {
+      // Restarted on every change, so the refetch comes after the last one has settled.
+      if (usageTimer) clearTimeout(usageTimer);
+      usageTimer = setTimeout(() => {
+        usageTimer = null;
+        void queryClient.invalidateQueries({ queryKey: ['sources'] });
+      }, USAGE_CACHE_MS);
+      return queryClient.invalidateQueries({
         queryKey: source && path ? ['listing', source, path] : ['listing'],
-      }),
+      });
+    },
     [queryClient],
   );
 }
 
 export function useFileActions() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateListing();
 
   const createFolder = useCallback(
@@ -89,6 +106,12 @@ export function useFileActions() {
         } else {
           toast(t('prompts.deleted'));
         }
+        const gone = new Set(result.succeeded.map((s) => `${s.source}:${s.path}`));
+        for (const item of items) {
+          if (gone.has(`${item.source}:${item.path}`)) {
+            adjustUsage(queryClient, item.source, -item.size);
+          }
+        }
         return result.succeeded.length > 0;
       } catch (e) {
         showError(e);
@@ -97,7 +120,7 @@ export function useFileActions() {
         await invalidate();
       }
     },
-    [invalidate, t],
+    [invalidate, queryClient, t],
   );
 
   const startTransfer = useCallback((mode: 'move' | 'copy', items: FileItem[]) => {

@@ -1,5 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { ApiError } from '@/api/client';
 import { createFolder, getListing, search, searchResultToItem } from '@/api/resources';
 import { listShares } from '@/api/share';
 import { type FileItem, type SourcePermissions } from '@/api/types';
+import { getSources } from '@/api/users';
 import { Breadcrumbs } from '@/components/files/breadcrumbs';
 import { FileRow } from '@/components/files/file-row';
 import { FileTile } from '@/components/files/file-tile';
@@ -28,16 +29,19 @@ import { Spacing } from '@/constants/theme';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useFileActions, useInvalidateListing } from '@/hooks/use-file-actions';
 import { useOpenFile } from '@/hooks/use-open-file';
+import { useSources } from '@/hooks/use-sources';
 import { useTheme } from '@/hooks/use-theme';
 import { ask } from '@/lib/dialog';
 import { formatDate, formatSize, isValidName, sortItems } from '@/lib/files';
-import { errorMessage, showError, toast } from '@/lib/notify';
+import { errorMessage, showError, showMessage, toast } from '@/lib/notify';
 import { itemKey, sharedKeys } from '@/lib/shares';
+import { adjustUsage, isLowSpace, sourceFree } from '@/lib/space';
 import { baseName, parentDir } from '@/lib/url';
 import { setPrefs, type SortBy, usePrefs } from '@/session/prefs';
 import { useSelf, useServer } from '@/session/session';
 import { announceTransfers } from '@/transfers/announce';
 import { downloadItems } from '@/transfers/download';
+import { pendingUploadBytes } from '@/transfers/store';
 import {
   type PickedFile,
   pickDocuments,
@@ -83,6 +87,9 @@ export default function FolderScreen() {
     queryKey: ['listing', source, dir],
     queryFn: () => getListing(source, dir),
   });
+  const queryClient = useQueryClient();
+  const sourceInfo = useSources().visible.find((s) => s.name === source);
+  const lowFree = sourceInfo && isLowSpace(sourceInfo) ? sourceFree(sourceInfo) : null;
   const invalidate = useInvalidateListing();
   const actions = useFileActions();
   const openFile = useOpenFile();
@@ -162,6 +169,35 @@ export default function FolderScreen() {
     [source],
   );
 
+  /**
+   * Whether `bytes` more fit in the free space the server reports (cached there for up to
+   * 30 s), counting uploads still queued for this source. The server itself doesn't check:
+   * it writes until the disk is full and then fails the upload.
+   */
+  async function hasSpace(bytes: number): Promise<boolean> {
+    let free: number | null = null;
+    try {
+      // Cached data younger than 30 s (the server's own cache) includes recent uploads and
+      // deletes, which the server's figure may not yet.
+      const sources = await queryClient.fetchQuery({ queryKey: ['sources'], queryFn: getSources });
+      const info = sources.find((s) => s.name === source);
+      free = info ? sourceFree(info) : null;
+    } catch {
+      // Unknown; the server has the last word.
+    }
+    const needed = bytes + pendingUploadBytes(source);
+    if (free === null || needed <= free) return true;
+    showMessage(
+      t('mobile.notEnoughSpace'),
+      t('mobile.notEnoughSpaceMessage', {
+        needed: formatSize(needed),
+        free: formatSize(free),
+        source,
+      }),
+    );
+    return false;
+  }
+
   async function startUpload(pick: () => Promise<PickedFile[]>) {
     const picked = await pick();
     if (picked.length === 0) return;
@@ -185,6 +221,20 @@ export default function FolderScreen() {
       overwrite = choice === 'replace';
     }
     if (files.length === 0) return;
+    // A replaced file gives its space back only once its replacement is complete (the server
+    // writes to a temp file first), so the largest file still needs its full size.
+    const names = new Set(files.map((f) => f.name));
+    const replacedSizes = new Map(
+      overwrite
+        ? (listing.data?.items ?? [])
+            .filter((i) => !i.isDir && names.has(i.name))
+            .map((i) => [i.name, i.size])
+        : [],
+    );
+    const replaced = [...replacedSizes.values()].reduce((sum, size) => sum + size, 0);
+    const total = files.reduce((sum, f) => sum + f.size, 0);
+    const largest = Math.max(...files.map((f) => f.size));
+    if (!(await hasSpace(Math.max(total - replaced, largest)))) return;
     uploadFiles(
       files,
       {
@@ -193,7 +243,10 @@ export default function FolderScreen() {
         overwrite,
         chunkSizeMb: self?.fileLoading.uploadChunkSizeMb ?? 10,
       },
-      () => void invalidate(source, dir),
+      (ok, file) => {
+        if (ok) adjustUsage(queryClient, source, file.size - (replacedSizes.get(file.name) ?? 0));
+        void invalidate(source, dir);
+      },
     );
     announceTransfers(files.length);
   }
@@ -208,8 +261,8 @@ export default function FolderScreen() {
       return;
     }
     if (!folder) return;
+    const size = folder.files.reduce((sum, f) => sum + f.size, 0);
     if (folder.files.length > 0) {
-      const size = folder.files.reduce((sum, f) => sum + f.size, 0);
       const choice = await ask({
         title: t('mobile.uploadFolder'),
         message: t('mobile.uploadFolderConfirm', {
@@ -236,6 +289,7 @@ export default function FolderScreen() {
       });
       if (choice !== 'replace') return;
     }
+    if (!(await hasSpace(size))) return;
     // Folders first, parents before children; when merging, existing ones are fine.
     const dirs = [folder.name, ...folder.dirs.map((d) => `${folder.name}/${d}`)];
     for (const rel of dirs) {
@@ -261,7 +315,10 @@ export default function FolderScreen() {
         overwrite: exists,
         chunkSizeMb: self?.fileLoading.uploadChunkSizeMb ?? 10,
       },
-      () => void invalidate(source, dir),
+      (ok, file) => {
+        if (ok) adjustUsage(queryClient, source, file.size);
+        void invalidate(source, dir);
+      },
     );
     announceTransfers(folder.files.length);
   }
@@ -519,6 +576,11 @@ export default function FolderScreen() {
     <ThemedView style={styles.flex}>
       {header}
       <Breadcrumbs source={source} path={dir} onNavigate={goTo} />
+      {lowFree !== null && perms.create ? (
+        <View style={styles.message}>
+          <Banner kind="error" message={t('mobile.storageLow', { free: formatSize(lowFree) })} />
+        </View>
+      ) : null}
       {error ? (
         <View style={styles.message}>
           <Banner kind="error" message={errorMessage(error)} />

@@ -389,7 +389,7 @@ async function uploadChunked(id: string, picked: PickedFile, target: UploadTarge
 export function uploadFiles(
   files: PickedFile[],
   target: UploadTarget,
-  onFinished: (ok: boolean) => void,
+  onFinished: (ok: boolean, file: PickedFile) => void,
 ) {
   for (const picked of files) {
     const dir = picked.relDir ? `${joinPath(target.dir, picked.relDir)}/` : target.dir;
@@ -421,14 +421,14 @@ export function uploadFiles(
         }
         if (getTransfer(id)?.status === 'cancelled') return;
         updateTransfer(id, { status: 'done', loaded: picked.size });
-        onFinished(true);
+        onFinished(true, picked);
       } catch (e) {
         if (getTransfer(id)?.status !== 'cancelled') {
           // Keep the cause ("Unable to resolve host …") under the generic message.
           const cause = e instanceof NetworkError && e.message ? `\n${e.message}` : '';
           updateTransfer(id, { status: 'error', error: errorMessage(e) + cause });
         }
-        onFinished(false);
+        onFinished(false, picked);
       }
     };
     setRestart(id, () => enqueue(job));
