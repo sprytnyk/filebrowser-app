@@ -227,24 +227,25 @@ export default function SettingsScreen() {
         </View>
 
         {menu.sheet}
-        <TextPrompt
-          visible={renaming !== null}
-          title={t('mobile.renameServer')}
-          label={t('mobile.serverName')}
-          initialValue={renaming ? profileName(renaming) : ''}
-          submitLabel={t('general.save')}
-          cancelLabel={t('general.cancel')}
-          onSubmit={(value) => {
-            if (renaming)
-              updateProfile(renaming.id, { label: normalizeLabel(value, renaming.server) });
-            setRenaming(null);
-          }}
-          onCancel={() => setRenaming(null)}
-        />
         <ThemedText type="caption" themeColor="textSecondary" style={styles.about}>
           {`${Constants.expoConfig?.name ?? ''} ${Constants.expoConfig?.version ?? ''}\n${t('mobile.about')}`}
         </ThemedText>
       </ScrollView>
+      {/* Outside the ScrollView, which would take the first tap on Save to close the keyboard. */}
+      <TextPrompt
+        visible={renaming !== null}
+        title={t('mobile.renameServer')}
+        label={t('mobile.serverName')}
+        initialValue={renaming ? profileName(renaming) : ''}
+        submitLabel={t('general.save')}
+        cancelLabel={t('general.cancel')}
+        onSubmit={(value) => {
+          if (renaming)
+            updateProfile(renaming.id, { label: normalizeLabel(value, renaming.server) });
+          setRenaming(null);
+        }}
+        onCancel={() => setRenaming(null)}
+      />
       <ToastHost />
     </ThemedView>
   );
