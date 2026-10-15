@@ -10,7 +10,7 @@ stay in the web UI.
   <img src="docs/screenshots/photos.png" width="200" alt="Photos folder in grid view with thumbnails">
   <img src="docs/screenshots/actions.png" width="200" alt="Actions for a file">
   <img src="docs/screenshots/share.png" width="200" alt="A share with its preview and download links">
-  <img src="docs/screenshots/settings.png" width="200" alt="Settings with two servers">
+  <img src="docs/screenshots/settings.png" width="200" alt="Settings with storage usage, one source almost full">
 </p>
 
 ## Features
@@ -68,6 +68,23 @@ The scope is narrow on purpose:
   A smaller app keeps that realistic.
 
 Anything the app leaves out is still in the web UI on the same server.
+
+### Gaps in the server it works around
+
+Checked against the v2.0.1-stable source:
+
+- **Free space before uploads.** The server doesn't check free space. It writes an upload until
+  the disk is full and then fails it. The app checks first, counting uploads still waiting in
+  the queue, and stops uploads that wouldn't fit. It also warns once less than 10% of a disk is
+  free.
+- **Usage that lags behind.** The server caches disk usage for 30 seconds, and its indexed
+  "used" figure can trail uploads and deletes for longer, in the web UI too. The app shows the
+  size of the source's root folder, which is always current, and updates free space as soon as
+  its own uploads and deletes finish.
+- **Interrupted large uploads.** The server keeps a partial file but locks its path to the
+  upload that started it for 30 minutes, so starting over gets a conflict. The app remembers
+  that upload, so retrying, even after the app was closed, picks up from the last chunk the
+  server confirmed.
 
 ## Requirements
 
