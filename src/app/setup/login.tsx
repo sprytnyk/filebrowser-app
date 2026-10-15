@@ -22,8 +22,16 @@ export default function LoginScreen() {
   const switcher = useServerSwitcher({ withRemove: true });
 
   const [step, setStep] = useState<Step>('credentials');
-  const [username, setUsername] = useState('');
+  // Prefilled after a session expires, so only the password needs retyping.
+  const [username, setUsername] = useState(active?.username ?? '');
   const [password, setPassword] = useState('');
+  const [profileId, setProfileId] = useState(active?.id);
+  if (active?.id !== profileId) {
+    // Switched servers while on this screen: show that server's account instead.
+    setProfileId(active?.id);
+    setUsername(active?.username ?? '');
+    setPassword('');
+  }
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordAgain, setNewPasswordAgain] = useState('');
@@ -209,6 +217,7 @@ export default function LoginScreen() {
         value={password}
         onChangeText={setPassword}
         secret
+        autoFocus={!!active?.username}
         autoComplete="current-password"
         textContentType="password"
         returnKeyType="go"
