@@ -44,3 +44,6 @@ example
 
 # app code, even where a global gitignore excludes lib/ directories
 !/src/lib/
+
+# Gradle output of the local native modules
+/modules/*/android/build/
