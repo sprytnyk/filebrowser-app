@@ -17,17 +17,25 @@ Stop and report back if any step fails. Don't work around a failure.
 ## 1. Pre-flight
 
 - You must be on `main`, and `git fetch origin` must show `main` neither behind nor diverged.
+- **Outdated Expo packages.** Before anything else, run `npx expo-doctor`. If it reports
+  packages that don't match the versions the installed SDK expects, list them (package,
+  installed, expected) and ask the user whether to update them now. Don't continue the
+  release until they answer.
+  - **Yes:** run `npx expo install --fix`. `git diff --stat` should show only `package.json`
+    and `package-lock.json`. Run `npx expo-doctor` again, then commit (unsigned, hook runs) as
+    `build(deps): update expo packages to sdk <major> patch versions`. The update ships in
+    this release and goes under Other in the notes.
+  - **No:** keep the current versions and list the outdated packages in the report.
 - **Uncommitted work** gets committed first. Make one Conventional Commit per logical change
   (unsigned) and let the pre-commit hook run. Never stage secret files, `dist/` or scratch
   files. If it's unclear whether a change belongs in the release, ask.
-- Run the checks. All three must pass:
+- Run the checks. All three must pass, except for version mismatches the user chose to keep:
   ```bash
   npx expo lint
   npx tsc --noEmit
   npx expo-doctor
   ```
-  If expo-doctor reports patch-version mismatches, tell the user. Don't run
-  `npx expo install --fix` without their OK.
+  Never run `npx expo install --fix` without the user's OK.
 - **README.** Compare `git log <last-tag>..HEAD` with `README.md` (Features, What it covers,
   Gaps in the server it works around, Testing). Update anything user-visible that's missing
   in a `docs(readme): ...` commit. Only refresh screenshots in `docs/screenshots/` if the
@@ -145,6 +153,7 @@ Report briefly:
 
 - the version and tag
 - the commits that went in
+- outdated Expo packages the user chose to keep, if any
 - the EAS build URL
 - the three files in `dist/vX.Y.Z/` (APK, `SHA256SUMS`, `SHA256SUMS.asc`) and their verification result
 - the release notes block
