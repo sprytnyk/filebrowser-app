@@ -1,6 +1,6 @@
 import { Directory, DownloadTask, File, Paths, type DownloadProgress } from 'expo-file-system';
 
-import { ApiError, GatewayError, NetworkError, request } from '@/api/client';
+import { ApiError, GatewayError, getBaseUrl, NetworkError, request } from '@/api/client';
 import { archiveUrl, rawUrl } from '@/api/resources';
 import { type FileItem } from '@/api/types';
 import i18n from '@/i18n';
@@ -19,6 +19,8 @@ import {
 } from '@/transfers/store';
 
 const enqueue = createQueue(2);
+/** Room for files kept for the in-app viewer; the ones fetched longest ago go first. */
+const VIEW_CACHE_BYTES = 500 * 1024 * 1024;
 /** Waits before each retry of a download that failed on the network or at a gateway. */
 const RETRY_DELAYS = [2000, 5000, 10000];
 const GATEWAY_ERRORS = [502, 503, 504];
@@ -242,8 +244,14 @@ export async function downloadItems(items: FileItem[]): Promise<void> {
   announceTransfers(1);
 }
 
-/** Fetches one file into the cache (for "Open with"), tracked like other downloads. */
-export async function downloadForOpen(item: FileItem): Promise<File | null> {
+/**
+ * Fetches one file into the cache (for "Open with"), tracked like other downloads; `onTransfer`
+ * gets the transfer's id.
+ */
+export async function downloadForOpen(
+  item: FileItem,
+  onTransfer?: (id: string) => void,
+): Promise<File | null> {
   const id = addTransfer({
     kind: 'download',
     name: item.name,
@@ -251,6 +259,7 @@ export async function downloadForOpen(item: FileItem): Promise<File | null> {
     target: '',
     total: item.size,
   });
+  onTransfer?.(id);
   try {
     const file = await fetchToCache(id, rawUrl(item), item.name, ifRangeDate(item.modified));
     if (file) updateTransfer(id, { status: 'done', loaded: item.size, total: item.size });
@@ -260,6 +269,71 @@ export async function downloadForOpen(item: FileItem): Promise<File | null> {
     deleteScratch(id);
     updateTransfer(id, { status: 'error', error: failureMessage(e) });
     throw e;
+  }
+}
+
+/** Short stable name for a cache folder (cyrb53), since paths can outgrow a file name. */
+function hashKey(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+const viewCacheDir = () => new Directory(Paths.cache, 'view');
+
+/** One folder per file on the server, holding the version last fetched in a subfolder. */
+function viewCachePaths(item: FileItem) {
+  const entry = new Directory(
+    viewCacheDir(),
+    hashKey(`${getBaseUrl()}|${item.source}|${item.path}`),
+  );
+  const version = new Directory(entry, hashKey(`${item.modified}|${item.size}`));
+  return { entry, version, file: new File(version, item.name) };
+}
+
+/**
+ * The in-app viewer's copy of `item`. Comes from the cache if this version was fetched before,
+ * in this run or an earlier one; otherwise downloads it like "Open with". Null when cancelled.
+ */
+export async function downloadForView(
+  item: FileItem,
+  onTransfer?: (id: string) => void,
+): Promise<File | null> {
+  const { entry, version, file: cached } = viewCachePaths(item);
+  if (cached.exists) return cached;
+  const file = await downloadForOpen(item, onTransfer);
+  if (!file) return null;
+  // An older version of the file makes way for this one.
+  if (entry.exists) entry.delete();
+  version.create({ intermediates: true });
+  await file.move(version);
+  return file;
+}
+
+/** Keeps the viewer's cache within VIEW_CACHE_BYTES; call once at startup. */
+export function trimViewCache() {
+  try {
+    const dir = viewCacheDir();
+    if (!dir.exists) return;
+    const entries = dir
+      .list()
+      .filter((e): e is Directory => e instanceof Directory)
+      .map((d) => ({ dir: d, size: d.size ?? 0, time: d.info().modificationTime ?? 0 }))
+      .sort((a, b) => b.time - a.time);
+    let kept = 0;
+    for (const e of entries) {
+      kept += e.size;
+      if (kept > VIEW_CACHE_BYTES) e.dir.delete();
+    }
+  } catch {
+    // Nothing to trim.
   }
 }
 

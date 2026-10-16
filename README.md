@@ -27,7 +27,8 @@ stay in the web UI.
   Large files go up in chunks, retry after short network drops, and resume where they stopped.
 - **Download** to a device folder you pick once. Folders and multiple items download as a zip.
   If the folder already has a file with that name, the new one is saved as "name (1).ext".
-- **View** images, video and audio in the app. Other files open in the app of your choice.
+- **View** images, video, audio and PDFs in the app. A PDF is downloaded once and kept, so it
+  opens again at once until it changes on the server. Other files open in the app of your choice.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
   manage your shares in one list.
 - **Storage.** Settings shows how much each source holds and how much free space is left on its
@@ -52,7 +53,7 @@ covers part of it:
 | Sign-in with password or LDAP, two-factor codes, required password change, sign-in pages in front of the server (proxy auth), session renewal and logout | Single sign-on (OIDC) and passkeys                                                                                               |
 | Listing, creating, renaming, moving, copying and deleting files and folders                                                                              | User management, access rules and server settings                                                                                |
 | Chunked uploads, single-file and zip downloads                                                                                                           | Duplicate finder, size viewer, file watcher, activity log and advanced search                                                    |
-| Thumbnails, image viewer, video and audio playback                                                                                                       | Built-in editors and viewers (text, Markdown, OnlyOffice, documents, EPUB, 3D). The app opens these files in another app instead |
+| Thumbnails, image and PDF viewer, video and audio playback                                                                                               | Built-in editors and viewers (text, Markdown, OnlyOffice, documents, EPUB, 3D). The app opens these files in another app instead |
 | Share links with expiry and password, listing and deleting your shares                                                                                   | Share customisation beyond expiry and password, API tokens, notifications, pinned items                                          |
 | Basic search, changing your own password                                                                                                                 | Other profile and display preferences                                                                                            |
 

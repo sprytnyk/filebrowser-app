@@ -414,6 +414,8 @@
     "gatewayBlocked": "The server's sign-in page blocked this request. Sign in again and retry.",
     "gatewayContinue": "Continue",
     "gatewayDone": "Done",
-    "gatewayLoadFailed": "Couldn't load the sign-in page."
+    "gatewayLoadFailed": "Couldn't load the sign-in page.",
+    "pdfPassword": "This PDF is password-protected. Open it in another app to enter the password.",
+    "pdfInvalid": "This file can't be shown as a PDF."
   }
 }
