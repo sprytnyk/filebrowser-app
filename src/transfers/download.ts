@@ -53,6 +53,18 @@ function scratchDir(id: string): Directory {
   return dir;
 }
 
+/** `name`, or "name (1).ext", "name (2).ext", … if the folder already has it. */
+function freeName(dir: Directory, name: string): string {
+  const taken = new Set(dir.list().map((entry) => entry.name));
+  if (!taken.has(name)) return name;
+  const dot = name.lastIndexOf('.');
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ''];
+  for (let n = 1; ; n++) {
+    const candidate = `${stem} (${n})${ext}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
 /**
  * Behind a sign-in gateway, a download without its session would save the gateway's login page
  * as the file. Check the session (fetch shares it) and that the cookie can be passed on first.
@@ -115,11 +127,13 @@ export async function downloadItems(items: FileItem[]): Promise<void> {
     try {
       const file = await fetchToCache(id, url, name);
       if (!file || getTransfer(id)?.status === 'cancelled') return;
-      // SAF picks a free name ("name (1).ext") if one already exists.
+      // copy() rejects when the folder already has this name, so save under a free one.
+      const saved = freeName(dir, name);
+      if (saved !== name) file.rename(saved);
       await file.copy(dir);
       const size = file.size ?? 0;
       updateTransfer(id, { status: 'done', loaded: size, total: size });
-      toast(i18n.t('mobile.downloaded', { name }));
+      toast(i18n.t('mobile.downloaded', { name: saved }));
     } catch (e) {
       if (getTransfer(id)?.status !== 'cancelled') {
         updateTransfer(id, { status: 'error', error: errorMessage(e) });
