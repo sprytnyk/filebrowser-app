@@ -164,6 +164,24 @@ To test against a local server, run the `gtstef/filebrowser:2.0.1-stable` Docker
 port 8080. With the phone on USB, `adb reverse tcp:8080 tcp:8080` makes it reachable from the app
 as `http://localhost:8080`.
 
+### Building
+
+Expo Go doesn't have the app's own native modules in `modules/`. Without them, PDFs open in
+another app instead of the viewer, and servers behind a sign-in gateway only partly work. A
+development build has everything.
+
+Building needs JDK 17 and the Android SDK with the platform, build tools and NDK versions listed
+in `node_modules/react-native/gradle/libs.versions.toml`:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk
+npx expo run:android                                            # development build, installed over USB
+npx eas-cli@latest build -p android --profile preview --local   # release APK
+```
+
+Release APKs are built locally with `eas build --local`. It runs the same steps as a cloud
+build and signs with the keystore kept on EAS, so updates install over earlier releases.
+
 ### Project layout
 
 ```
