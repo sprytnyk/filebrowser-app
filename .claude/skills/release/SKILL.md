@@ -1,13 +1,13 @@
 ---
 name: release
-description: Ship a new version of the app. Bumps the version, makes a signed release commit and tag, pushes, builds the APK on EAS, writes and signs SHA256SUMS in dist/, and writes the release notes there too. Use when the user asks to release, ship, or "ship it as usual".
+description: Ship a new version of the app. Bumps the version, makes a signed release commit and tag, pushes, builds the APK on this machine with `eas build --local`, writes and signs SHA256SUMS in dist/, and writes the release notes there too. Use when the user asks to release, ship, or "ship it as usual".
 argument-hint: '[version, e.g. 1.3.1; derived from commits if omitted]'
 disable-model-invocation: true
 ---
 
 # Release
 
-Running this skill is the user's request to commit, push, build on EAS and sign. Their global
+Running this skill is the user's request to commit, push, build and sign. Their global
 rules still apply. Never force-push, retag or rewrite pushed history without asking first,
 never add AI attribution to commits, never bypass hooks, and keep IPs and secrets out of
 release notes.
@@ -77,30 +77,60 @@ git push origin vX.Y.Z
 
 If either push is rejected, stop and ask. Never force-push.
 
-## 5. EAS build
+## 5. Local EAS build
+
+The APK is built on this machine with `eas build --local`. It runs the same steps as an EAS
+cloud build, from the committed tree (the gitignored `android/` folder isn't used). EAS still
+signs it with the keystore it manages, downloaded just for the build, and still bumps
+`versionCode` remotely. The only traffic to EAS is checking the project and fetching that
+keystore.
+
+**Toolchain.** It isn't in the shell profile, so pass it on the command line:
+
+- JDK 17: `/usr/lib/jvm/java-17-openjdk-amd64`
+- Android SDK: `~/Android/Sdk`, with `platforms;android-<compileSdk>`,
+  `build-tools;<buildTools>` and `ndk;<ndkVersion>`. Read those three values from
+  `node_modules/react-native/gradle/libs.versions.toml`, since they change with the SDK. If one
+  is missing from `~/Android/Sdk`, stop and give the user the
+  `~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "<package>"` command to install it.
+
+**Build.** `dist/vX.Y.Z` must not exist yet; the build copies the APK there:
 
 ```bash
-npx eas-cli@latest build -p android --profile preview --non-interactive --no-wait
+mkdir dist/vX.Y.Z
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk \
+  EAS_LOCAL_BUILD_ARTIFACTS_DIR=$PWD/dist/vX.Y.Z \
+  npx eas-cli@latest build -p android --profile preview --local --non-interactive
 ```
 
-Take the build ID from the output, then wait in the background with one poll every 2
-minutes. Don't poll any other way:
+The user may want to watch the build. If so, give them the command to run in their own
+terminal and continue once they say it finished. Otherwise run it yourself with
+`run_in_background`, sending its output to a log file in the scratchpad, and wait for the
+notification. It takes about 10–20 minutes. Don't poll.
 
-```bash
-for i in $(seq 1 20); do sleep 120; st=$(npx eas-cli@latest build:view <BUILD_ID> --json 2>/dev/null | python3 -I -c 'import json,sys; d=json.load(sys.stdin); print(d["status"], (d.get("artifacts") or {}).get("buildUrl") or "", d.get("appBuildVersion") or "")'); echo "$st"; case "$st" in FINISHED*|ERRORED*|CANCELED*) break;; esac; done
-```
-
-Run it with `run_in_background` and wait for the notification. If the build errors, read its
-logs (`npx eas-cli@latest build:view <BUILD_ID>`) and report back.
+If the build fails, report the error from the end of the log (Gradle's "What went wrong"
+block) and stop.
 
 ## 6. Artifacts in dist/
 
-`dist/` is gitignored. Download the APK and checksum it:
+`dist/` is gitignored. The build leaves one APK with a generated name in `dist/vX.Y.Z`.
+Rename it:
 
 ```bash
-mkdir -p dist/vX.Y.Z
-curl -sSfL -o dist/vX.Y.Z/filebrowser-app-vX.Y.Z.apk <buildUrl>
+ls dist/vX.Y.Z/*.apk   # exactly one
+mv dist/vX.Y.Z/<generated>.apk dist/vX.Y.Z/filebrowser-app-vX.Y.Z.apk
 ```
+
+**Same signing key as before.** Android only installs an update signed with the same key as
+the installed app. Compare the certificate with the previous release's APK:
+
+```bash
+APKSIGNER="$HOME/Android/Sdk/build-tools/<buildTools>/apksigner"
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 "$APKSIGNER" verify --print-certs dist/vX.Y.Z/filebrowser-app-vX.Y.Z.apk | grep 'SHA-256'
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 "$APKSIGNER" verify --print-certs dist/<previous>/filebrowser-app-<previous>.apk | grep 'SHA-256'
+```
+
+The two digests must match. If they don't, stop: users couldn't update without uninstalling.
 
 Then, from `dist/vX.Y.Z`, write, sign and verify the checksums:
 
@@ -157,7 +187,7 @@ Report briefly:
 - the version and tag
 - the commits that went in
 - outdated Expo packages the user chose to keep, if any
-- the EAS build URL
+- that the build ran locally, and that its signing certificate matches the previous release
 - the four files in `dist/vX.Y.Z/` (APK, `SHA256SUMS`, `SHA256SUMS.asc`, `RELEASE_NOTES.md`) and the
   verification result
 - the release notes block
