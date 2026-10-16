@@ -38,6 +38,8 @@ type Internal = Transfer & {
   settled?: { loaded: number; total: number };
   cancel?: () => void;
   restart?: () => void;
+  /** Drops what it keeps for a retry (a partial download) once it leaves the list. */
+  discard?: () => void;
   lastSampleAt?: number;
   lastSampleLoaded?: number;
 };
@@ -209,6 +211,7 @@ export function retryTransfer(id: string) {
 }
 
 export function clearFinished() {
+  for (const t of transfers) if (!isRunning(t)) t.discard?.();
   transfers = transfers.filter(isRunning);
   emit();
 }

@@ -1,6 +1,6 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, DownloadTask, File, Paths, type DownloadProgress } from 'expo-file-system';
 
-import { GatewayError, request } from '@/api/client';
+import { ApiError, GatewayError, NetworkError, request } from '@/api/client';
 import { archiveUrl, rawUrl } from '@/api/resources';
 import { type FileItem } from '@/api/types';
 import i18n from '@/i18n';
@@ -19,6 +19,9 @@ import {
 } from '@/transfers/store';
 
 const enqueue = createQueue(2);
+/** Waits before each retry of a download that failed on the network or at a gateway. */
+const RETRY_DELAYS = [2000, 5000, 10000];
+const GATEWAY_ERRORS = [502, 503, 504];
 
 /** The SAF folder the user granted once; asks again if it is gone or `forcePick` is set. */
 export async function ensureDownloadDir(forcePick = false): Promise<Directory | null> {
@@ -75,19 +78,108 @@ async function checkGateway(creds: ReturnType<typeof transferCredentials>) {
   await request('health', { baseUrl: creds.baseUrl, auth: false });
 }
 
-/** Streams a URL into the app cache with progress; null when cancelled. */
-async function fetchToCache(id: string, url: string, name: string): Promise<File | null> {
-  const creds = transferCredentials(id);
-  await checkGateway(creds);
+/**
+ * The native task rejects with "Call to function 'FileSystemDownloadTask.start' has been
+ * rejected. → Caused by: Unable to download a file: <cause>". Returns a NetworkError for a
+ * dropped connection or timeout ("Software caused connection abort"), an ApiError for an HTTP
+ * status, and anything else unchanged.
+ */
+function downloadError(e: unknown): unknown {
+  const raw = e instanceof Error ? e.message : String(e);
+  const cause = raw.split('Unable to download a file:')[1]?.trim();
+  if (!cause) return e;
+  const http = /^HTTP (\d+)$/.exec(cause);
+  if (http) return new ApiError(cause, Number(http[1]));
+  return new NetworkError(cause, /timed? ?out/i.test(cause));
+}
+
+function isRetryable(e: unknown) {
+  return e instanceof NetworkError || (e instanceof ApiError && GATEWAY_ERRORS.includes(e.status));
+}
+
+/** Keeps the cause ("Software caused connection abort") under the generic message. */
+function failureMessage(e: unknown) {
+  return errorMessage(e) + (e instanceof NetworkError && e.message ? `\n${e.message}` : '');
+}
+
+const sizeOf = (file: File) => (file.exists ? (file.size ?? 0) : 0);
+
+/**
+ * A listing's `modified` as an HTTP date for If-Range, or null if it doesn't parse. The server
+ * compares whole seconds with the file's mtime and sends the full file when they differ.
+ */
+function ifRangeDate(modified: string): string | null {
+  // Go sends nanoseconds; keep milliseconds so Date.parse accepts it.
+  const ms = Date.parse(modified.replace(/(\.\d{3})\d+/, '$1'));
+  return Number.isNaN(ms) ? null : new Date(ms).toUTCString();
+}
+
+/**
+ * Streams a URL into the app cache with progress; null when cancelled. Network and gateway
+ * failures are retried a few times, like upload chunks; the delays start over whenever an
+ * attempt got further than any before, so a big file on a flaky link keeps going.
+ *
+ * With `ifRange` (single files), a retry resumes from the bytes already in the cache, also
+ * those left by an earlier failed run of this transfer. The server's ServeContent honours
+ * Range, and If-Range makes it send the whole file instead if it changed since the listing
+ * (the native task then starts over). Zips always start over: a Range request makes the
+ * server build a fresh archive to a temp file before sending anything.
+ */
+async function fetchToCache(
+  id: string,
+  url: string,
+  name: string,
+  ifRange: string | null,
+): Promise<File | null> {
   const dest = new File(scratchDir(id), name);
-  const task = File.createDownloadTask(url, dest, {
-    headers: creds.headers,
-    onProgress: ({ bytesWritten, totalBytes }) => {
-      updateTransfer(id, { loaded: bytesWritten, total: totalBytes > 0 ? totalBytes : 0 });
-    },
-  });
-  updateTransfer(id, { status: 'active', cancel: () => task.cancel() });
-  return task.downloadAsync();
+  let total = getTransfer(id)?.total ?? 0;
+  let best = ifRange ? sizeOf(dest) : 0;
+  let failures = 0;
+  for (;;) {
+    const creds = transferCredentials(id);
+    await checkGateway(creds);
+    const offset = ifRange ? sizeOf(dest) : 0;
+    // The connection dropped after the last byte arrived; a Range past the end would get 416.
+    if (offset > 0 && offset === total) return dest;
+    const options = {
+      headers: offset > 0 ? { ...creds.headers, 'If-Range': ifRange! } : creds.headers,
+      onProgress: ({ bytesWritten, totalBytes }: DownloadProgress) => {
+        if (totalBytes > 0) total = totalBytes;
+        updateTransfer(id, { loaded: bytesWritten, total });
+      },
+    };
+    const task =
+      offset > 0
+        ? DownloadTask.fromSavable(
+            { url, fileUri: dest.uri, isDirectory: false, resumeData: String(offset) },
+            options,
+          )
+        : File.createDownloadTask(url, dest, options);
+    // Start from the resumed bytes, so a Retry doesn't count them toward the rate.
+    updateTransfer(id, { status: 'active', loaded: offset, cancel: () => task.cancel() });
+    try {
+      return await (offset > 0 ? task.resumeAsync() : task.downloadAsync());
+    } catch (e) {
+      if (getTransfer(id)?.status === 'cancelled') return null;
+      const error = downloadError(e);
+      const reached = sizeOf(dest);
+      if (reached > best) {
+        best = reached;
+        failures = 0;
+      }
+      if (!isRetryable(error) || failures >= RETRY_DELAYS.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[failures++]));
+      if (getTransfer(id)?.status === 'cancelled') return null;
+    }
+  }
+}
+
+function deleteScratch(id: string) {
+  try {
+    new Directory(Paths.cache, 'downloads', id).delete();
+  } catch {
+    // Already gone.
+  }
 }
 
 /**
@@ -120,12 +212,12 @@ export async function downloadItems(items: FileItem[]): Promise<void> {
     target: downloadDirLabel(dir.uri) ?? '',
     total: single ? single.size : 0,
   });
+  const ifRange = single ? ifRangeDate(single.modified) : null;
 
   const job = async () => {
     if (getTransfer(id)?.status === 'cancelled') return;
-    const work = scratchDir(id);
     try {
-      const file = await fetchToCache(id, url, name);
+      const file = await fetchToCache(id, url, name, ifRange);
       if (!file || getTransfer(id)?.status === 'cancelled') return;
       // copy() rejects when the folder already has this name, so save under a free one.
       const saved = freeName(dir, name);
@@ -136,16 +228,15 @@ export async function downloadItems(items: FileItem[]): Promise<void> {
       toast(i18n.t('mobile.downloaded', { name: saved }));
     } catch (e) {
       if (getTransfer(id)?.status !== 'cancelled') {
-        updateTransfer(id, { status: 'error', error: errorMessage(e) });
+        updateTransfer(id, { status: 'error', error: failureMessage(e) });
       }
     } finally {
-      try {
-        work.delete();
-      } catch {
-        // Already gone.
-      }
+      // Keep a failed file's partial download so Retry resumes it; discard drops it when the
+      // transfer is cleared from the list.
+      if (!ifRange || getTransfer(id)?.status !== 'error') deleteScratch(id);
     }
   };
+  updateTransfer(id, { discard: () => deleteScratch(id) });
   setRestart(id, () => enqueue(job));
   enqueue(job);
   announceTransfers(1);
@@ -161,11 +252,13 @@ export async function downloadForOpen(item: FileItem): Promise<File | null> {
     total: item.size,
   });
   try {
-    const file = await fetchToCache(id, rawUrl(item), item.name);
+    const file = await fetchToCache(id, rawUrl(item), item.name, ifRangeDate(item.modified));
     if (file) updateTransfer(id, { status: 'done', loaded: item.size, total: item.size });
+    else deleteScratch(id);
     return file;
   } catch (e) {
-    updateTransfer(id, { status: 'error', error: errorMessage(e) });
+    deleteScratch(id);
+    updateTransfer(id, { status: 'error', error: failureMessage(e) });
     throw e;
   }
 }
