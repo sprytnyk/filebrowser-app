@@ -1,6 +1,6 @@
 ---
 name: release
-description: Ship a new version of the app. Bumps the version, makes a signed release commit and tag, pushes, builds the APK on EAS, writes and signs SHA256SUMS in dist/, and drafts release notes. Use when the user asks to release, ship, or "ship it as usual".
+description: Ship a new version of the app. Bumps the version, makes a signed release commit and tag, pushes, builds the APK on EAS, writes and signs SHA256SUMS in dist/, and writes the release notes there too. Use when the user asks to release, ship, or "ship it as usual".
 argument-hint: '[version, e.g. 1.3.1; derived from commits if omitted]'
 disable-model-invocation: true
 ---
@@ -116,8 +116,11 @@ The signature must say Good, from `0xC00C0F0D647BD3C6`.
 ## 7. Release notes
 
 Write them from the commits since the previous tag, in plain words, and say why a change
-matters when it isn't obvious. Leave out sections that would be empty. Give them in one
-fenced `markdown` block, ready to paste into the GitHub release:
+matters when it isn't obvious. Leave out sections that would be empty. Save them to
+`dist/vX.Y.Z/RELEASE_NOTES.md` (the content below, without the fence), so they sit next to
+the APK and checksums. Leave the notes out of `SHA256SUMS`: they quote the checksums, so they
+are written after signing. Also give them in one fenced `markdown` block in the report, ready
+to paste into the GitHub release:
 
 ```markdown
 ## FileBrowser Quantum for Android vX.Y.Z
@@ -155,7 +158,8 @@ Report briefly:
 - the commits that went in
 - outdated Expo packages the user chose to keep, if any
 - the EAS build URL
-- the three files in `dist/vX.Y.Z/` (APK, `SHA256SUMS`, `SHA256SUMS.asc`) and their verification result
+- the four files in `dist/vX.Y.Z/` (APK, `SHA256SUMS`, `SHA256SUMS.asc`, `RELEASE_NOTES.md`) and the
+  verification result
 - the release notes block
 - leftovers, such as running test containers or `adb reverse`
 
