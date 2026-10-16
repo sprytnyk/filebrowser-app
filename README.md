@@ -130,8 +130,9 @@ self-hosted server over HTTPS. That covered:
 - creating, renaming, moving, copying and deleting files and folders, including bulk actions
 - uploads from the file picker and the gallery, including while switching servers
 - folder uploads with subfolders
-- files of different types and sizes, from a few KB to about 1 GB: APKs, ISO images, zip
-  archives, MP4 videos and images
+- files of different types and sizes, from a few KB to about 3 GB: APKs, ISO images, zip
+  archives, MP4 videos and images. Checksums of 3 GB files matched after both upload and
+  download
 - cancelling, retrying and resuming large uploads, and recovering from network drops
 - downloads of single files and of folders as zip, including the same file downloaded again
 - the image viewer and video playback
