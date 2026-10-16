@@ -26,6 +26,7 @@ stay in the web UI.
 - **Upload** from the file picker, the photo gallery, or a whole folder with its subfolders.
   Large files go up in chunks, retry after short network drops, and resume where they stopped.
 - **Download** to a device folder you pick once. Folders and multiple items download as a zip.
+  If the folder already has a file with that name, the new one is saved as "name (1).ext".
 - **View** images, video and audio in the app. Other files open in the app of your choice.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
   manage your shares in one list.
@@ -129,7 +130,7 @@ self-hosted server over HTTPS. That covered:
 - files of different types and sizes, from a few KB to about 1 GB: APKs, ISO images, zip
   archives, MP4 videos and images
 - cancelling, retrying and resuming large uploads, and recovering from network drops
-- downloads of single files and of folders as zip
+- downloads of single files and of folders as zip, including the same file downloaded again
 - the image viewer and video playback
 - creating and deleting shares, and copying their links
 - the screen lock and its timeout
