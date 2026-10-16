@@ -27,6 +27,7 @@ stay in the web UI.
   Large files go up in chunks, retry after short network drops, and resume where they stopped.
 - **Download** to a device folder you pick once. Folders and multiple items download as a zip.
   If the folder already has a file with that name, the new one is saved as "name (1).ext".
+  Downloads retry after short network drops, and a single file resumes where it stopped.
 - **View** images, video, audio and PDFs in the app. A PDF is downloaded once and kept, so it
   opens again at once until it changes on the server. Other files open in the app of your choice.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
@@ -114,7 +115,8 @@ crash reporting.
 
 ## Testing
 
-The app was tested on a physical Android phone, running in Expo Go (SDK 57), against
+The app was tested on a physical Android phone, running in Expo Go (SDK 57) and, for the PDF
+viewer, a development build, against
 FileBrowser Quantum **v2.0.1-stable** servers running in Docker, and against a real
 self-hosted server over HTTPS. That covered:
 
@@ -133,6 +135,8 @@ self-hosted server over HTTPS. That covered:
 - cancelling, retrying and resuming large uploads, and recovering from network drops
 - downloads of single files and of folders as zip, including the same file downloaded again
 - the image viewer and video playback
+- the PDF viewer: short and 300-page files, a 188 MB file, zoom, password-protected and broken
+  files, and opening a file again from the cache
 - creating and deleting shares, and copying their links
 - the screen lock and its timeout
 
