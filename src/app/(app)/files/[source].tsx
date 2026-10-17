@@ -1,6 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +12,7 @@ import { type FileItem, type SourcePermissions } from '@/api/types';
 import { getSources } from '@/api/users';
 import { Breadcrumbs } from '@/components/files/breadcrumbs';
 import { FileRow } from '@/components/files/file-row';
+import { HashCard } from '@/components/files/hash-card';
 import { FileTile } from '@/components/files/file-tile';
 import { ServerSwitchButton, useServerName } from '@/components/servers/server-switcher';
 import { ThemedText } from '@/components/themed-text';
@@ -337,31 +337,7 @@ export default function FolderScreen() {
       sha256.changed
         ? { label: t('mobile.fileChanged'), value: t('mobile.fileChangedHint') }
         : null,
-      sha256.calculating || sha256.value || sha256.error
-        ? {
-            label: 'SHA-256',
-            value: sha256.calculating
-              ? t('mobile.calculating')
-              : (sha256.value ?? errorMessage(sha256.error)),
-          }
-        : null,
     ].filter((d): d is { label: string; value: string } => d !== null);
-  }
-
-  function infoActions(item: FileItem): SheetAction[] {
-    if (item.isDir || sha256.calculating) return [];
-    if (sha256.value) {
-      return [{ id: 'copySha256', title: t('mobile.copySha256'), icon: 'content_copy' }];
-    }
-    return [{ id: 'sha256', title: t('mobile.calculateSha256'), icon: 'tag', keepOpen: true }];
-  }
-
-  async function onInfoAction(id: string) {
-    if (id === 'sha256') sha256.calculate();
-    else if (id === 'copySha256' && sha256.value) {
-      await Clipboard.setStringAsync(sha256.value);
-      toast(t('buttons.copySuccess'));
-    }
   }
 
   function itemActions(item: FileItem): SheetAction[] {
@@ -746,10 +722,19 @@ export default function FolderScreen() {
         title={infoItem?.name}
         subtitle={t('prompts.fileInfo')}
         details={infoItem ? infoDetails(infoItem) : []}
-        actions={infoItem ? infoActions(infoItem) : []}
+        actions={[]}
         onClose={() => setInfoItem(null)}
-        onSelect={(id) => void onInfoAction(id)}
-      />
+        onSelect={() => {}}>
+        {infoItem && !infoItem.isDir ? (
+          <HashCard
+            label="SHA-256"
+            value={sha256.value}
+            calculating={sha256.calculating}
+            error={sha256.error ? errorMessage(sha256.error) : null}
+            onCalculate={sha256.calculate}
+          />
+        ) : null}
+      </ActionSheet>
       <TextPrompt
         visible={prompt !== null}
         title={prompt?.kind === 'rename' ? t('general.rename') : t('files.newFolder')}

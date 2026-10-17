@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,8 +17,6 @@ export type SheetAction = {
   destructive?: boolean;
   /** Marks the current choice in single-choice lists (sort order, timeouts, …). */
   checked?: boolean;
-  /** The sheet stays open, e.g. to show the result of the action in its details. */
-  keepOpen?: boolean;
 };
 
 type ActionSheetProps = {
@@ -27,6 +25,8 @@ type ActionSheetProps = {
   subtitle?: string;
   /** Read-only label/value rows shown above the actions (used for item info). */
   details?: { label: string; value: string }[];
+  /** Custom content between the details and the actions (e.g. a file's checksum). */
+  children?: ReactNode;
   actions: SheetAction[];
   onSelect: (id: string) => void;
   onClose: () => void;
@@ -38,6 +38,7 @@ export function ActionSheet({
   title,
   subtitle,
   details,
+  children,
   actions,
   onSelect,
   onClose,
@@ -87,6 +88,7 @@ export function ActionSheet({
                 </ThemedText>
               </View>
             ))}
+            {children}
             {actions.map((action) => {
               const color = action.destructive ? theme.danger : theme.text;
               return (
@@ -95,7 +97,7 @@ export function ActionSheet({
                   accessibilityRole="menuitem"
                   accessibilityState={{ checked: action.checked }}
                   onPress={() => {
-                    if (!action.keepOpen) onClose();
+                    onClose();
                     onSelect(action.id);
                   }}
                   style={({ pressed }) => [
