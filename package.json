@@ -58,7 +58,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
