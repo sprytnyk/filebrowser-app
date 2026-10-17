@@ -34,8 +34,11 @@ export type PickedFolder = { name: string; dirs: string[]; files: PickedFile[] }
 
 const MB = 1024 * 1024;
 const enqueue = createQueue(2);
-/** Waits before each retry of a request that failed on the network or at a gateway. */
-const RETRY_DELAYS = [2000, 5000, 10000];
+/**
+ * Waits before each retry of a request that failed on the network or at a gateway: quick at
+ * first for brief blips, then backing off to ride out a Wi-Fi reconnect (about a minute).
+ */
+const RETRY_DELAYS = [500, 1000, 2000, 4000, 8000, 15000, 30000];
 const GATEWAY_ERRORS = [502, 503, 504];
 
 export async function pickDocuments(): Promise<PickedFile[]> {
