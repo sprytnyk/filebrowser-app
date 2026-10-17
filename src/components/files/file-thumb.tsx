@@ -8,23 +8,25 @@ import { type FileItem } from '@/api/types';
 import { Icon } from '@/components/ui/icon';
 import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { fileKind, kindIcon } from '@/lib/files';
+import { type FileKind, fileKind, kindIcon } from '@/lib/files';
 import { useServer } from '@/session/session';
+
+/** Kinds the server draws previews for; it renders the first page of a PDF. */
+const THUMB_KINDS: FileKind[] = ['image', 'video', 'pdf'];
 
 type FileThumbProps = {
   item: FileItem;
   size: number;
 };
 
-/** Server thumbnail for images/videos when previews are enabled, otherwise a type icon. */
+/** Server thumbnail for images, videos and PDFs if previews are on, otherwise a type icon. */
 export function FileThumb({ item, size }: FileThumbProps) {
   const theme = useTheme();
   const { enableThumbs } = useServer();
   const [failed, setFailed] = useState(false);
   const kind = fileKind(item);
   const icon = kindIcon(kind);
-  const showThumb =
-    enableThumbs && item.hasPreview && !failed && (kind === 'image' || kind === 'video');
+  const showThumb = enableThumbs && item.hasPreview && !failed && THUMB_KINDS.includes(kind);
 
   return (
     <View
