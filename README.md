@@ -24,20 +24,24 @@ stay in the web UI.
   size or date, and search.
 - **Manage files.** Create folders, rename, move, copy and delete, one at a time or several at
   once.
+- **Checksums.** A file's info sheet calculates its SHA-256 on the server, to check an upload or
+  download against the original.
 - **Upload** from the file picker, the photo gallery, or a whole folder with its subfolders.
   Large files go up in chunks, retry after short network drops, and resume where they stopped.
 - **Download** to a device folder you pick once. Folders and multiple items download as a zip.
   If the folder already has a file with that name, the new one is saved as "name (1).ext".
   Downloads retry after short network drops, and a single file resumes where it stopped.
 - **View** images, video, audio and PDFs in the app. A PDF is downloaded once and kept, so it
-  opens again at once until it changes on the server. Other files open in the app of your choice.
+  opens again at once until it changes on the server. Other files open in the app of your choice,
+  or in the share sheet to save or send them when no app opens their type.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
   manage your shares in one list.
 - **Storage.** Settings shows how much each source holds and how much free space is left on its
   disk, in red with a warning once the disk is almost full. Uploads that wouldn't fit are stopped
   before they start, since the server doesn't check.
 - **Transfers.** A tab with progress, speed and history for uploads and downloads, with cancel
-  and retry. Transfers keep going when you switch servers.
+  and retry, uploads in green and downloads in blue. Transfers keep going when you switch servers
+  and when the app is in the background, with their progress in a notification.
 - **Screen lock** with fingerprint, face or device PIN. It locks again after a delay you choose.
 - **English and Ukrainian.** The app follows the phone's language and switches as soon as you
   change it. On Android 13 and later you can also pick the app's language on its own in
@@ -57,7 +61,7 @@ covers part of it:
 | Chunked uploads, single-file and zip downloads                                                                                                           | Duplicate finder, size viewer, file watcher, activity log and advanced search                                                    |
 | Thumbnails, image and PDF viewer, video and audio playback                                                                                               | Built-in editors and viewers (text, Markdown, OnlyOffice, documents, EPUB, 3D). The app opens these files in another app instead |
 | Share links with expiry and password, listing and deleting your shares                                                                                   | Share customisation beyond expiry and password, API tokens, notifications, pinned items                                          |
-| Basic search, changing your own password                                                                                                                 | Other profile and display preferences                                                                                            |
+| Basic search, SHA-256 checksums, changing your own password                                                                                              | Other profile and display preferences                                                                                            |
 
 ### Why it's kept simple
 
@@ -134,6 +138,7 @@ self-hosted server over HTTPS. That covered:
 - files of different types and sizes, from a few KB to about 3 GB: APKs, ISO images, zip
   archives, MP4 videos and images. Checksums of 3 GB files matched after both upload and
   download
+- SHA-256 checksums from the info sheet, matching `sha256sum` of the file on the server
 - cancelling, retrying and resuming large uploads, and recovering from network drops
 - downloads of single files and of folders as zip, including the same file downloaded again
 - the image viewer and video playback
@@ -182,7 +187,7 @@ in `node_modules/react-native/gradle/libs.versions.toml`:
 
 ```bash
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk
-npx expo run:android                                            # development build, installed over USB
+npm run android                                                 # development build, installed over USB
 npx eas-cli@latest build -p android --profile preview --local   # release APK
 ```
 
