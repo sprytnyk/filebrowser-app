@@ -59,20 +59,37 @@ export async function openExternally(item: FileItem) {
   }
 }
 
+const GENERIC_TYPE = 'application/octet-stream';
+
+/**
+ * The server's type as a MIME type Android can match. For content it can't identify it sends
+ * placeholders such as "blob", which no app accepts, not even in the share sheet.
+ */
+function mimeType(item: FileItem) {
+  const type = item.type.toLowerCase();
+  return /^[a-z0-9][\w.+-]*\/[\w.+-]+$/.test(type) ? type : GENERIC_TYPE;
+}
+
 /** Hands a local copy of `item` to the app the user picks. */
 export async function openWith(file: File, item: FileItem) {
-  try {
-    await withLockSuspended(() =>
-      IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-        data: file.contentUri,
-        type: item.type || 'application/octet-stream',
-        flags: FLAG_GRANT_READ_URI_PERMISSION,
-      }),
-    );
-  } catch {
-    // No app handles this type; offer the share sheet instead.
-    await withLockSuspended(() =>
-      Sharing.shareAsync(file.uri, { mimeType: item.type, dialogTitle: item.name }),
-    );
+  const type = mimeType(item);
+  // Apps that open "any file" are rarely what's wanted for an unknown type; the share sheet
+  // offers saving it (Files, Drive) and sending it instead.
+  if (type !== GENERIC_TYPE) {
+    try {
+      await withLockSuspended(() =>
+        IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+          data: file.contentUri,
+          type,
+          flags: FLAG_GRANT_READ_URI_PERMISSION,
+        }),
+      );
+      return;
+    } catch {
+      // No app handles this type; offer the share sheet instead.
+    }
   }
+  await withLockSuspended(() =>
+    Sharing.shareAsync(file.uri, { mimeType: type, dialogTitle: item.name }),
+  );
 }
