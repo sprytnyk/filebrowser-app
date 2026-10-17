@@ -14,10 +14,12 @@ import { Colors } from '@/constants/theme';
 import { useIsDark } from '@/hooks/use-theme';
 import { LockGate } from '@/lock/lock-gate';
 import { SessionProvider, useSession } from '@/session/session';
+import { keepTransfersRunning } from '@/transfers/background';
 import { clearDownloadScratch, trimViewCache } from '@/transfers/download';
 
 clearDownloadScratch();
 trimViewCache();
+keepTransfersRunning();
 
 // React Native has no window focus; refetch stale queries when the app comes to the foreground.
 focusManager.setEventListener((setFocused) => {

@@ -20,6 +20,7 @@ import i18n from '@/i18n';
 import { gatewaySignInOpen, openGatewaySignIn, openGatewaySignOut } from '@/lib/gateway';
 import { shouldRenew } from '@/lib/jwt';
 import { showMessage } from '@/lib/notify';
+import { delay } from '@/lib/transfer-service';
 import {
   activeProfile,
   addProfile,
@@ -234,12 +235,20 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
     };
     renewAll();
-    const interval = setInterval(renewAll, RENEW_CHECK_MS);
+    // Not setInterval: React Native pauses it in the background, where transfers kept running
+    // by the foreground service still need a valid token.
+    let stopped = false;
+    void (async () => {
+      while (!stopped) {
+        await delay(RENEW_CHECK_MS);
+        if (!stopped) renewAll();
+      }
+    })();
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') renewAll();
     });
     return () => {
-      clearInterval(interval);
+      stopped = true;
       sub.remove();
     };
   }, [signedIn, expireSession]);

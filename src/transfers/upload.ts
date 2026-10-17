@@ -7,6 +7,7 @@ import { uploadUrl } from '@/api/resources';
 import i18n from '@/i18n';
 import { isGatewayUploadResult } from '@/lib/gateway';
 import { errorMessage } from '@/lib/notify';
+import { delay } from '@/lib/transfer-service';
 import { joinPath } from '@/lib/url';
 import { withLockSuspended } from '@/lock/lock-state';
 import { readJson, StorageKeys, writeJson } from '@/session/storage';
@@ -250,7 +251,7 @@ async function postBody(
     } catch (e) {
       if (!isRetryable(e) || attempt >= RETRY_DELAYS.length) throw e;
       if (getTransfer(id)?.status === 'cancelled') throw e;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt]));
+      await delay(RETRY_DELAYS[attempt]);
       if (getTransfer(id)?.status === 'cancelled') throw e;
     }
   }

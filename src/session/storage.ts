@@ -28,6 +28,8 @@ export const StorageKeys = {
   lockBackgroundedAt: 'fb.lock.backgroundedAt',
   /** Unfinished chunked uploads' session IDs, so a later upload can take them over. */
   uploadSessions: 'fb.uploadSessions',
+  /** The notification permission was asked for once; Android remembers the answer. */
+  notificationsAsked: 'fb.notificationsAsked',
 } as const;
 
 /** Each server's session token sits in its own key. */

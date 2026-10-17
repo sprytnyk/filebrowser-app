@@ -71,6 +71,7 @@ function emit() {
     clearTimeout(emitTimer);
     emitTimer = null;
   }
+  lastEmitAt = Date.now();
   transfers = [...transfers];
   listeners.forEach((l) => l());
 }
@@ -79,12 +80,19 @@ function emit() {
  * Native tasks report progress hundreds of times a second; re-rendering on each one keeps
  * the JS thread so busy that taps (like Cancel) get lost. Byte counts publish at most every
  * PROGRESS_INTERVAL ms; status changes still publish at once.
+ *
+ * The progress events themselves publish once the interval has passed: React Native pauses
+ * timers in the background, and the notification should keep up there too. The timer only
+ * publishes the last update of a burst.
  */
 const PROGRESS_INTERVAL = 250;
 let emitTimer: ReturnType<typeof setTimeout> | null = null;
+let lastEmitAt = 0;
 
 function emitSoon() {
-  emitTimer ??= setTimeout(emit, PROGRESS_INTERVAL);
+  const wait = lastEmitAt + PROGRESS_INTERVAL - Date.now();
+  if (wait <= 0) emit();
+  else emitTimer ??= setTimeout(emit, wait);
 }
 
 export function addTransfer(
@@ -239,10 +247,12 @@ function subscribe(listener: () => void) {
   };
 }
 
-const snapshot = () => transfers as readonly Transfer[];
+export const subscribeTransfers = subscribe;
+
+export const getTransfers = () => transfers as readonly Transfer[];
 
 export function useTransfers(): readonly Transfer[] {
-  return useSyncExternalStore(subscribe, snapshot);
+  return useSyncExternalStore(subscribe, getTransfers);
 }
 
 /** Runs async jobs with a concurrency cap, in submission order. */

@@ -5,6 +5,7 @@ import { archiveUrl, rawUrl } from '@/api/resources';
 import { type FileItem } from '@/api/types';
 import i18n from '@/i18n';
 import { errorMessage, toast } from '@/lib/notify';
+import { delay } from '@/lib/transfer-service';
 import { baseName, parentDir } from '@/lib/url';
 import { withLockSuspended } from '@/lock/lock-state';
 import { announceTransfers } from '@/transfers/announce';
@@ -170,7 +171,7 @@ async function fetchToCache(
         failures = 0;
       }
       if (!isRetryable(error) || failures >= RETRY_DELAYS.length) throw error;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[failures++]));
+      await delay(RETRY_DELAYS[failures++]);
       if (getTransfer(id)?.status === 'cancelled') return null;
     }
   }
