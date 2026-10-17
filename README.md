@@ -20,7 +20,8 @@ stay in the web UI.
 - **Sign-in.** Password (including LDAP) and two-factor codes (TOTP). Servers that require a
   password change on first login are handled too. Servers behind a sign-in page on the reverse
   proxy (forward auth, with FileBrowser's proxy auth) open that page in the app.
-- **Browse.** List or grid view, thumbnails, sort by name, size or date, and search.
+- **Browse.** List or grid view, thumbnails (for PDFs too, from the first page), sort by name,
+  size or date, and search.
 - **Manage files.** Create folders, rename, move, copy and delete, one at a time or several at
   once.
 - **Upload** from the file picker, the photo gallery, or a whole folder with its subfolders.
@@ -138,6 +139,7 @@ self-hosted server over HTTPS. That covered:
 - the image viewer and video playback
 - the PDF viewer: short and 300-page files, a 188 MB file, zoom, password-protected and broken
   files, and opening a file again from the cache
+- PDF thumbnails, with a type icon for files the server can't draw
 - creating and deleting shares, and copying their links
 - the screen lock and its timeout
 
