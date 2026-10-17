@@ -17,6 +17,8 @@ export type SheetAction = {
   destructive?: boolean;
   /** Marks the current choice in single-choice lists (sort order, timeouts, …). */
   checked?: boolean;
+  /** The sheet stays open, e.g. to show the result of the action in its details. */
+  keepOpen?: boolean;
 };
 
 type ActionSheetProps = {
@@ -93,7 +95,7 @@ export function ActionSheet({
                   accessibilityRole="menuitem"
                   accessibilityState={{ checked: action.checked }}
                   onPress={() => {
-                    onClose();
+                    if (!action.keepOpen) onClose();
                     onSelect(action.id);
                   }}
                   style={({ pressed }) => [

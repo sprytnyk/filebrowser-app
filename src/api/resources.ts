@@ -85,6 +85,26 @@ export async function bulkDelete(items: DeleteItem[]): Promise<BulkResult<Delete
   return (await res.json()) as BulkResult<DeleteItem>;
 }
 
+/** The server hashes the whole file before it answers, which takes a while for big ones. */
+const CHECKSUM_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** A hex digest, with the file's size and modified time as the server read them just before. */
+export type Checksum = Pick<FileItem, 'size' | 'modified'> & { value: string };
+
+/** Digest of a file, computed by the server (md5, sha1, sha256 and sha512). */
+export async function fileChecksum(
+  item: Pick<FileItem, 'source' | 'path'>,
+  algo: 'md5' | 'sha1' | 'sha256' | 'sha512',
+): Promise<Checksum> {
+  const info = await requestJson<RawItem & { checksums?: Record<string, string> }>('resources', {
+    params: { source: item.source, path: item.path, checksum: algo },
+    timeoutMs: CHECKSUM_TIMEOUT_MS,
+  });
+  const value = info.checksums?.[algo];
+  if (!value) throw new Error(`The server sent no ${algo} checksum`);
+  return { value, size: info.size, modified: info.modified };
+}
+
 /** Thumbnail URL; send it with authHeaders(). */
 export function previewUrl(item: Pick<FileItem, 'source' | 'path'>, size: 'small' | 'large') {
   return apiUrl('resources/preview', { source: item.source, path: item.path, size });

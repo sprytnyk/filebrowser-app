@@ -1,5 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +30,7 @@ import { Spacing } from '@/constants/theme';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useFileActions, useInvalidateListing } from '@/hooks/use-file-actions';
 import { useOpenFile } from '@/hooks/use-open-file';
+import { useSha256 } from '@/hooks/use-sha256';
 import { useSources } from '@/hooks/use-sources';
 import { useTheme } from '@/hooks/use-theme';
 import { ask } from '@/lib/dialog';
@@ -111,6 +113,7 @@ export default function FolderScreen() {
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [sheetItem, setSheetItem] = useState<FileItem | null>(null);
   const [infoItem, setInfoItem] = useState<FileItem | null>(null);
+  const sha256 = useSha256(infoItem && !infoItem.isDir ? infoItem : null);
   const menu = useActionSheet();
 
   const items = useMemo(() => {
@@ -324,12 +327,41 @@ export default function FolderScreen() {
   }
 
   function infoDetails(item: FileItem) {
+    // Size and date of the version the hash belongs to, which can be newer than the list.
+    const shown = sha256.hashed ?? item;
     return [
       { label: t('general.path'), value: `${item.source}:${item.path}` },
-      item.isDir ? null : { label: t('general.size'), value: formatSize(item.size) },
-      { label: t('files.lastModified'), value: formatDate(item.modified) },
+      item.isDir ? null : { label: t('general.size'), value: formatSize(shown.size) },
+      { label: t('files.lastModified'), value: formatDate(shown.modified) },
       item.isDir ? null : { label: t('general.type'), value: item.type },
+      sha256.changed
+        ? { label: t('mobile.fileChanged'), value: t('mobile.fileChangedHint') }
+        : null,
+      sha256.calculating || sha256.value || sha256.error
+        ? {
+            label: 'SHA-256',
+            value: sha256.calculating
+              ? t('mobile.calculating')
+              : (sha256.value ?? errorMessage(sha256.error)),
+          }
+        : null,
     ].filter((d): d is { label: string; value: string } => d !== null);
+  }
+
+  function infoActions(item: FileItem): SheetAction[] {
+    if (item.isDir || sha256.calculating) return [];
+    if (sha256.value) {
+      return [{ id: 'copySha256', title: t('mobile.copySha256'), icon: 'content_copy' }];
+    }
+    return [{ id: 'sha256', title: t('mobile.calculateSha256'), icon: 'tag', keepOpen: true }];
+  }
+
+  async function onInfoAction(id: string) {
+    if (id === 'sha256') sha256.calculate();
+    else if (id === 'copySha256' && sha256.value) {
+      await Clipboard.setStringAsync(sha256.value);
+      toast(t('buttons.copySuccess'));
+    }
   }
 
   function itemActions(item: FileItem): SheetAction[] {
@@ -714,9 +746,9 @@ export default function FolderScreen() {
         title={infoItem?.name}
         subtitle={t('prompts.fileInfo')}
         details={infoItem ? infoDetails(infoItem) : []}
-        actions={[]}
+        actions={infoItem ? infoActions(infoItem) : []}
         onClose={() => setInfoItem(null)}
-        onSelect={() => {}}
+        onSelect={(id) => void onInfoAction(id)}
       />
       <TextPrompt
         visible={prompt !== null}
