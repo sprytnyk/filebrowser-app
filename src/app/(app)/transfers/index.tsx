@@ -142,7 +142,7 @@ function StatLine({
   );
 }
 
-function ProgressBar({ fraction }: { fraction: number }) {
+function ProgressBar({ fraction, color }: { fraction: number; color?: string }) {
   const theme = useTheme();
   return (
     <View style={[styles.track, { backgroundColor: theme.surfaceSecondary }]}>
@@ -150,7 +150,7 @@ function ProgressBar({ fraction }: { fraction: number }) {
         style={[
           styles.bar,
           {
-            backgroundColor: theme.primary,
+            backgroundColor: color ?? theme.primary,
             width: `${Math.min(1, Math.max(0, fraction)) * 100}%`,
           },
         ]}
@@ -216,16 +216,18 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
       break;
   }
 
-  const tint =
+  // Uploads are green and downloads blue, unless the transfer failed or was cancelled.
+  const direction = upload ? theme.upload : theme.download;
+  const [tint, tintBackground] =
     status === 'error'
-      ? theme.danger
+      ? [theme.danger, theme.errorBackground]
       : status === 'cancelled'
-        ? theme.textSecondary
-        : theme.primary;
+        ? [theme.textSecondary, theme.surfaceSecondary]
+        : [direction, upload ? theme.uploadBackground : theme.downloadBackground];
 
   return (
-    <View style={[styles.row, { backgroundColor: theme.surfacePrimary }]}>
-      <View style={[styles.badge, { backgroundColor: theme.surfaceSecondary }]}>
+    <View style={[styles.row, { backgroundColor: theme.surfacePrimary, borderLeftColor: tint }]}>
+      <View style={[styles.badge, { backgroundColor: tintBackground }]}>
         <Icon name={upload ? 'upload' : 'download'} color={tint} />
       </View>
       <View style={styles.flex}>
@@ -243,6 +245,7 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
           </View>
         ) : null}
         <View style={styles.route}>
+          <Icon name={upload ? 'smartphone' : 'cloud'} size={14} color={theme.textSecondary} />
           <ThemedText
             type="caption"
             themeColor="textSecondary"
@@ -251,7 +254,8 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
             style={styles.shrink}>
             {from}
           </ThemedText>
-          <Icon name="arrow_forward" size={14} color={theme.textSecondary} />
+          <Icon name="arrow_forward" size={14} color={tint} />
+          <Icon name={upload ? 'cloud' : 'smartphone'} size={14} color={theme.textSecondary} />
           <ThemedText
             type="caption"
             themeColor="textSecondary"
@@ -262,7 +266,9 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
           </ThemedText>
         </View>
         {/* Queued rows reserve the bar too, so starting doesn't change the row height. */}
-        {running ? <ProgressBar fraction={total > 0 ? loaded / total : 0} /> : null}
+        {running ? (
+          <ProgressBar fraction={total > 0 ? loaded / total : 0} color={direction} />
+        ) : null}
         {running ? (
           <>
             <StatLine left={detail} />
@@ -291,7 +297,7 @@ function TransferRow({ transfer }: { transfer: Transfer }) {
           onPress={() => retryTransfer(transfer.id)}
         />
       ) : status === 'done' ? (
-        <Icon name="check_circle" color={theme.primary} />
+        <Icon name="check_circle" color={direction} />
       ) : null}
     </View>
   );
@@ -327,6 +333,7 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     paddingRight: Spacing.two,
     borderRadius: Radius.medium,
+    borderLeftWidth: 3,
   },
   badge: {
     width: 40,
