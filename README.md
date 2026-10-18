@@ -120,45 +120,24 @@ crash reporting.
 
 ## Testing
 
-The app was tested on a physical Android phone, running in Expo Go (SDK 57) and, for the PDF
-viewer, a development build, against
-FileBrowser Quantum **v2.0.1-stable** servers running in Docker, and against a real
-self-hosted server over HTTPS. That covered:
-
-- adding servers, with and without a subpath, and switching between them
-- password sign-in and two-factor codes
-- signing in through a forward-auth sign-in page in front of the server (Traefik), including
-  expired sessions, with thumbnails, the viewer, uploads and downloads behind it
-- browsing several sources, thumbnails, list and grid views
-- the used and free space shown for each source, the almost-full warning and uploads blocked on
-  a full disk
-- creating, renaming, moving, copying and deleting files and folders, including bulk actions
-- uploads from the file picker and the gallery, including while switching servers
-- folder uploads with subfolders
-- files of different types and sizes, from a few KB to about 3 GB: APKs, ISO images, zip
-  archives, MP4 videos and images. Checksums of 3 GB files matched after both upload and
-  download
-- SHA-256 checksums from the info sheet, matching `sha256sum` of the file on the server
-- cancelling, retrying and resuming large uploads, and recovering from network drops
-- downloads of single files and of folders as zip, including the same file downloaded again
-- the image viewer and video playback
-- the PDF viewer: short and 300-page files, a 188 MB file, zoom, password-protected and broken
-  files, and opening a file again from the cache
-- PDF thumbnails, with a type icon for files the server can't draw
-- creating and deleting shares, and copying their links
-- the screen lock and its timeout
-
-iOS isn't supported.
+The app is tested manually with a release build on a physical Android phone, against
+FileBrowser Quantum v2.0.1-stable running in Docker and a real self-hosted server over HTTPS.
 
 ## Development
 
-You need Node.js and an Android phone with [Expo Go](https://expo.dev/go), or a development
-build.
+You need Node.js, an Android phone with USB debugging, JDK 17 and the Android SDK with the
+platform, build tools and NDK versions listed in
+`node_modules/react-native/gradle/libs.versions.toml`.
 
 ```bash
-npm install      # also installs the git hooks (husky)
-npx expo start   # then scan the QR code with Expo Go
+npm install   # also installs the git hooks (husky)
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk
+npm run android   # builds a development build, installs it over USB and starts Metro
 ```
+
+The app also starts in [Expo Go](https://expo.dev/go), but Expo Go lacks the app's native
+modules in `modules/`. There PDFs open in another app instead of the viewer, transfers pause
+when the app goes to the background, and servers behind a sign-in gateway only partly work.
 
 Checks:
 
@@ -176,23 +155,16 @@ To test against a local server, run the `gtstef/filebrowser:2.0.1-stable` Docker
 port 8080. With the phone on USB, `adb reverse tcp:8080 tcp:8080` makes it reachable from the app
 as `http://localhost:8080`.
 
-### Building
+### Release builds
 
-Expo Go doesn't have the app's own native modules in `modules/`. Without them, PDFs open in
-another app instead of the viewer, and servers behind a sign-in gateway only partly work. A
-development build has everything.
-
-Building needs JDK 17 and the Android SDK with the platform, build tools and NDK versions listed
-in `node_modules/react-native/gradle/libs.versions.toml`:
+Release APKs are built locally with `eas build --local`, using the same toolchain:
 
 ```bash
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk
-npm run android                                                 # development build, installed over USB
-npx eas-cli@latest build -p android --profile preview --local   # release APK
+npx eas-cli@latest build -p android --profile preview --local
 ```
 
-Release APKs are built locally with `eas build --local`. It runs the same steps as a cloud
-build and signs with the keystore kept on EAS, so updates install over earlier releases.
+It runs the same steps as a cloud build and signs with the keystore kept on the project's EAS
+account, so updates install over earlier releases. A fork needs its own EAS project and key.
 
 ### Project layout
 
@@ -200,10 +172,15 @@ build and signs with the keystore kept on EAS, so updates install over earlier r
 src/app/         screens and navigation (Expo Router)
 src/api/         FileBrowser Quantum API client
 src/session/     servers, sign-in and preferences
-src/transfers/   upload and download queue
+src/transfers/   upload and download queue, and keeping it running in the background
 src/lock/        screen lock
-src/components/  shared UI
+src/components/  shared UI, grouped by files, servers, shares and basic UI pieces
+src/hooks/       file and share actions, sources, checksums, theme
+src/lib/         helpers: paths and URLs, free space, PDFs, gateway cookies, dialogs, toasts
+src/constants/   theme colours
 src/i18n/        translations (keys match the web UI)
+modules/         the app's own Android native modules: gateway cookies, PDF pages,
+                 transfer service
 ```
 
 ## Credits
@@ -216,7 +193,8 @@ src/i18n/        translations (keys match the web UI)
 
 ## License
 
-[MIT](LICENSE). The FileBrowser Quantum logo and interface text keep their Apache-2.0 license.
+[MIT](LICENSE). The FileBrowser Quantum logo (`assets/images/`) and interface text
+(`src/i18n/en.json`) keep their [Apache-2.0](LICENSE-APACHE) license.
 
 Built with [Expo](https://expo.dev) and an AI coding agent
 ([Claude Code](https://claude.com/claude-code)).
