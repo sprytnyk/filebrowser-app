@@ -152,9 +152,7 @@ the APK and checksums. Leave the notes out of `SHA256SUMS`: they quote the check
 are written after signing. Also give them in one fenced `markdown` block in the report, ready
 to paste into the GitHub release:
 
-```markdown
-## FileBrowser Quantum for Android vX.Y.Z
-
+````markdown
 ### Features
 
 - **Short title.** What changed and why it helps.
@@ -167,18 +165,15 @@ to paste into the GitHub release:
 
 - Dependency updates, README and screenshot changes.
 
-Tested against FileBrowser Quantum v2.0.1-stable.
-
 ### Verify
 
+```bash
 gpg --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
+```
 
 Signing key: 0xC00C0F0D647BD3C6
-
-SHA-256:
-<contents of SHA256SUMS>
-```
+````
 
 ## 8. Report
 
