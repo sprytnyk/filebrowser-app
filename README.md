@@ -7,9 +7,9 @@ The app covers everyday file work. Server administration, user management and th
 stay in the web UI.
 
 <p align="center">
-  <img src="docs/screenshots/photos.png" width="200" alt="Photos folder in grid view with thumbnails">
+  <img src="docs/screenshots/photos.png" width="200" alt="Photos folder in grid view, one photo selected with its info button">
   <img src="docs/screenshots/actions.png" width="200" alt="Actions for a file">
-  <img src="docs/screenshots/share.png" width="200" alt="A share with its preview and download links">
+  <img src="docs/screenshots/shares.png" width="200" alt="Shares tab with a card per link, its creation date and expiry">
   <img src="docs/screenshots/settings.png" width="200" alt="Settings with storage usage, one source almost full">
 </p>
 
