@@ -110,8 +110,9 @@ Checked against the v2.0.1-stable source:
 
 - Android.
 - A FileBrowser Quantum server, version 2.0.x. The app shows a warning on other versions.
-- The server address, including its subpath if it has one, such as `https://files.example.com`
-  or `https://example.com/files`.
+- The server address, including its subpath if it has one, such as `files.example.com` or
+  `example.com/files`. Without `https://` or `http://` in front, the app tries HTTPS first and
+  then plain HTTP.
 
 Plain `http://` servers work, but the app warns that your password and files travel
 unencrypted. Use HTTPS for anything outside your home network.
