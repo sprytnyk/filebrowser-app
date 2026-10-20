@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authHeaders, getBaseUrl } from '@/api/client';
 import { previewUrl, rawUrl } from '@/api/resources';
 import { type FileItem } from '@/api/types';
+import { FileInfoSheet } from '@/components/files/file-info-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { HeaderButton } from '@/components/ui/header-button';
 import { Icon } from '@/components/ui/icon';
@@ -40,6 +41,7 @@ export default function ViewerScreen() {
     items.findIndex((i) => i.path === params.path),
   );
   const [index, setIndex] = useState(initial);
+  const [infoItem, setInfoItem] = useState<FileItem | null>(null);
   const current = items[index];
   const canDownload = !!self?.scopes.find((s) => s.name === current?.source)?.permissions.download;
 
@@ -81,6 +83,12 @@ export default function ViewerScreen() {
                   }
                 />
               ) : null}
+              <HeaderButton
+                icon="info"
+                label={t('general.info')}
+                color={WHITE}
+                onPress={() => setInfoItem(current)}
+              />
             </View>
           ),
         }}
@@ -108,6 +116,7 @@ export default function ViewerScreen() {
           {index + 1} / {items.length}
         </ThemedText>
       ) : null}
+      <FileInfoSheet item={infoItem} onClose={() => setInfoItem(null)} />
       <ToastHost />
     </View>
   );

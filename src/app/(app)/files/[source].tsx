@@ -10,8 +10,8 @@ import { createFolder, getListing, search, searchResultToItem } from '@/api/reso
 import { type FileItem, type SourcePermissions } from '@/api/types';
 import { getSources } from '@/api/users';
 import { Breadcrumbs } from '@/components/files/breadcrumbs';
+import { FileInfoSheet, SelectionInfoSheet } from '@/components/files/file-info-sheet';
 import { FileRow } from '@/components/files/file-row';
-import { HashCard } from '@/components/files/hash-card';
 import { FileTile } from '@/components/files/file-tile';
 import { ServerSwitchButton, useServerName } from '@/components/servers/server-switcher';
 import { ThemedText } from '@/components/themed-text';
@@ -29,7 +29,6 @@ import { Spacing } from '@/constants/theme';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useFileActions, useInvalidateListing } from '@/hooks/use-file-actions';
 import { useOpenFile } from '@/hooks/use-open-file';
-import { useSha256 } from '@/hooks/use-sha256';
 import { useSources } from '@/hooks/use-sources';
 import { useShares } from '@/hooks/use-shares';
 import { useTheme } from '@/hooks/use-theme';
@@ -113,7 +112,7 @@ export default function FolderScreen() {
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [sheetItem, setSheetItem] = useState<FileItem | null>(null);
   const [infoItem, setInfoItem] = useState<FileItem | null>(null);
-  const sha256 = useSha256(infoItem && !infoItem.isDir ? infoItem : null);
+  const [infoItems, setInfoItems] = useState<FileItem[] | null>(null);
   const menu = useActionSheet();
 
   const items = useMemo(() => {
@@ -326,20 +325,6 @@ export default function FolderScreen() {
     announceTransfers(folder.files.length);
   }
 
-  function infoDetails(item: FileItem) {
-    // Size and date of the version the hash belongs to, which can be newer than the list.
-    const shown = sha256.hashed ?? item;
-    return [
-      { label: t('general.path'), value: `${item.source}:${item.path}` },
-      item.isDir ? null : { label: t('general.size'), value: formatSize(shown.size) },
-      { label: t('files.lastModified'), value: formatDate(shown.modified) },
-      item.isDir ? null : { label: t('general.type'), value: item.type },
-      sha256.changed
-        ? { label: t('mobile.fileChanged'), value: t('mobile.fileChangedHint') }
-        : null,
-    ].filter((d): d is { label: string; value: string } => d !== null);
-  }
-
   function itemActions(item: FileItem): SheetAction[] {
     const all: (SheetAction & { hidden?: boolean })[] = [
       {
@@ -420,9 +405,13 @@ export default function FolderScreen() {
       case 'all':
         setSelected(new Set(items.map((i) => i.path)));
         return;
+      // Only looks, so the selection stays for whatever comes next.
+      case 'info':
+        if (chosen.length === 1) setInfoItem(chosen[0]);
+        else setInfoItems(chosen);
+        return;
       case 'share':
       case 'rename':
-      case 'info':
         if (chosen.length === 1) onItemAction(chosen[0], action);
         clearSelection();
         return;
@@ -500,18 +489,14 @@ export default function FolderScreen() {
                     title,
                     actions: [
                       { id: 'all', title: t('buttons.selectAll'), icon: 'select_all' },
-                      ...(selected.size === 1
+                      { id: 'info', title: t('general.info'), icon: 'info' },
+                      ...(selected.size === 1 && perms.modify
                         ? [
-                            ...(perms.modify
-                              ? [
-                                  {
-                                    id: 'rename',
-                                    title: t('general.rename'),
-                                    icon: 'drive_file_rename_outline' as const,
-                                  },
-                                ]
-                              : []),
-                            { id: 'info', title: t('general.info'), icon: 'info' as const },
+                            {
+                              id: 'rename',
+                              title: t('general.rename'),
+                              icon: 'drive_file_rename_outline' as const,
+                            },
                           ]
                         : []),
                       { id: 'copy', title: t('general.copy'), icon: 'content_copy' },
@@ -643,6 +628,8 @@ export default function FolderScreen() {
               selecting={selecting}
               onPress={() => openItem(item)}
               onLongPress={() => toggle(item)}
+              // Only for a lone selection; several selected items share the header's Info.
+              onInfo={selected.size === 1 ? () => setInfoItem(item) : undefined}
             />
           ) : (
             <FileRow
@@ -717,24 +704,8 @@ export default function FolderScreen() {
         }}
       />
       {menu.sheet}
-      <ActionSheet
-        visible={infoItem !== null}
-        title={infoItem?.name}
-        subtitle={t('prompts.fileInfo')}
-        details={infoItem ? infoDetails(infoItem) : []}
-        actions={[]}
-        onClose={() => setInfoItem(null)}
-        onSelect={() => {}}>
-        {infoItem && !infoItem.isDir ? (
-          <HashCard
-            label="SHA-256"
-            value={sha256.value}
-            calculating={sha256.calculating}
-            error={sha256.error ? errorMessage(sha256.error) : null}
-            onCalculate={sha256.calculate}
-          />
-        ) : null}
-      </ActionSheet>
+      <FileInfoSheet item={infoItem} onClose={() => setInfoItem(null)} />
+      <SelectionInfoSheet items={infoItems} onClose={() => setInfoItems(null)} />
       <TextPrompt
         visible={prompt !== null}
         title={prompt?.kind === 'rename' ? t('general.rename') : t('files.newFolder')}

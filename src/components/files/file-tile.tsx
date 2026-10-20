@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { type FileItem } from '@/api/types';
@@ -14,9 +15,20 @@ type FileTileProps = {
   selecting: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** Shown as a button on selected tiles, opposite the check mark. */
+  onInfo?: () => void;
 };
 
-export function FileTile({ item, size, selected, selecting, onPress, onLongPress }: FileTileProps) {
+export function FileTile({
+  item,
+  size,
+  selected,
+  selecting,
+  onPress,
+  onLongPress,
+  onInfo,
+}: FileTileProps) {
+  const { t } = useTranslation();
   const theme = useTheme();
 
   return (
@@ -40,13 +52,23 @@ export function FileTile({ item, size, selected, selecting, onPress, onLongPress
       <View>
         <FileThumb item={item} size={size - Spacing.two * 2} />
         {selecting ? (
-          <View style={[styles.check, { backgroundColor: theme.background }]}>
+          <View style={[styles.corner, styles.check, { backgroundColor: theme.background }]}>
             <Icon
               name={selected ? 'check_circle' : 'radio_button_unchecked'}
               color={selected ? theme.primary : theme.textSecondary}
               size={22}
             />
           </View>
+        ) : null}
+        {selected && onInfo ? (
+          <Pressable
+            onPress={onInfo}
+            hitSlop={Spacing.two}
+            accessibilityRole="button"
+            accessibilityLabel={t('general.info')}
+            style={[styles.corner, styles.info, { backgroundColor: theme.background }]}>
+            <Icon name="info" color={theme.primary} size={22} />
+          </Pressable>
         ) : null}
       </View>
       <ThemedText type="caption" numberOfLines={2} style={styles.name}>
@@ -62,12 +84,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     gap: Spacing.one,
   },
-  check: {
+  corner: {
     position: 'absolute',
     top: Spacing.one,
-    left: Spacing.one,
     borderRadius: 999,
   },
+  check: { left: Spacing.one },
+  info: { right: Spacing.one },
   name: {
     textAlign: 'center',
   },

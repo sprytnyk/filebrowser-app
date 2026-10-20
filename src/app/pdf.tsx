@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { type FileItem } from '@/api/types';
+import { FileInfoSheet } from '@/components/files/file-info-sheet';
 import { PdfPages } from '@/components/files/pdf-pages';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ export default function PdfScreen() {
   /** Why the PDF isn't showing: download failed or cancelled, or the file can't be drawn. */
   const [failure, setFailure] = useState<{ error: unknown } | 'cancelled' | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [showInfo, setShowInfo] = useState(false);
   const [transferId, setTransferId] = useState<string | null>(null);
   const transfer = useTransfers().find((x) => x.id === transferId);
   const canDownload = !!self?.scopes.find((s) => s.name === item?.source)?.permissions.download;
@@ -113,6 +115,11 @@ export default function PdfScreen() {
                   }
                 />
               ) : null}
+              <HeaderButton
+                icon="info"
+                label={t('general.info')}
+                onPress={() => setShowInfo(true)}
+              />
             </View>
           ),
         }}
@@ -145,6 +152,7 @@ export default function PdfScreen() {
           ) : null}
         </View>
       )}
+      <FileInfoSheet item={showInfo ? item : null} onClose={() => setShowInfo(false)} />
       <ToastHost />
     </View>
   );
