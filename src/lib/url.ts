@@ -13,15 +13,24 @@ export function buildQuery(params: Record<string, QueryValue> = {}): string {
   return parts.length > 0 ? `?${parts.join('&')}` : '';
 }
 
+/** Whether the user typed a scheme ("https://…"), rather than leaving it to the app. */
+export function hasScheme(input: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(input.trim());
+}
+
 /**
  * Normalizes what the user typed into a server base URL: scheme + host + optional subpath,
- * never ending in "/". Returns null when it isn't a usable http(s) URL.
+ * never ending in "/". Without a scheme it gets `scheme`. Returns null when it isn't a usable
+ * http(s) URL.
  */
-export function normalizeServerUrl(input: string): string | null {
+export function normalizeServerUrl(
+  input: string,
+  scheme: 'https' | 'http' = 'https',
+): string | null {
   let value = input.trim();
   if (value === '') return null;
-  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
-    value = `https://${value}`;
+  if (!hasScheme(value)) {
+    value = `${scheme}://${value}`;
   }
   let url: URL;
   try {

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { FormScreen } from '@/components/ui/form-screen';
 import { TextField } from '@/components/ui/text-field';
 import { openGatewaySignIn } from '@/lib/gateway';
-import { isPlainHttp, normalizeServerUrl } from '@/lib/url';
+import { hasScheme, isPlainHttp, normalizeServerUrl } from '@/lib/url';
 import { normalizeLabel } from '@/session/servers';
 import { useSession } from '@/session/session';
 
@@ -44,6 +44,28 @@ export default function ServerScreen() {
     }
   }
 
+  /**
+   * Without a scheme, tries HTTPS and falls back to plain HTTP when nothing answers there (or
+   * something other than FileBrowser does), so "192.168.1.5:8080" works for either. A timeout
+   * doesn't fall back: the host is unreachable, and trying again would only double the wait.
+   */
+  async function probeTyped(baseUrl: string): Promise<ServerInfo> {
+    try {
+      return await probeOrSignIn(baseUrl);
+    } catch (e) {
+      const fallback =
+        !hasScheme(input) &&
+        ((e instanceof NetworkError && !e.timedOut) || e instanceof NotFilebrowserError);
+      if (!fallback) throw e;
+      try {
+        return await probeOrSignIn(normalizeServerUrl(input, 'http')!);
+      } catch {
+        // Report what went wrong with HTTPS, the address the user most likely meant.
+        throw e;
+      }
+    }
+  }
+
   async function submit() {
     if (pendingHttp) {
       connect(pendingHttp, normalizeLabel(name, pendingHttp));
@@ -57,7 +79,7 @@ export default function ServerScreen() {
     setBusy(true);
     setError(null);
     try {
-      const info = await probeOrSignIn(baseUrl);
+      const info = await probeTyped(baseUrl);
       if (isPlainHttp(info.baseUrl)) {
         setInput(info.baseUrl);
         setPendingHttp(info);
