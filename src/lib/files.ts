@@ -36,6 +36,21 @@ export function fileKind(item: Pick<FileItem, 'isDir' | 'type' | 'name'>): FileK
   return 'other';
 }
 
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|avif|tiff?)$/i;
+const VIDEO_EXT = /\.(mp4|mkv|webm|mov|avi|m4v|wmv|flv)$/i;
+const AUDIO_EXT = /\.(mp3|flac|ogg|opus|wav|m4a|aac|wma)$/i;
+
+/** For items known only by name (e.g. share links, which carry no MIME type). */
+export function kindFromName(name: string, isDir: boolean): FileKind {
+  if (isDir) return 'folder';
+  if (IMAGE_EXT.test(name)) return 'image';
+  if (VIDEO_EXT.test(name)) return 'video';
+  if (AUDIO_EXT.test(name)) return 'audio';
+  if (/\.pdf$/i.test(name)) return 'pdf';
+  if (/\.(txt|md|log|csv)$/i.test(name)) return 'text';
+  return fileKind({ isDir, type: '', name });
+}
+
 const KIND_ICONS: Record<FileKind, IconName> = {
   folder: 'folder',
   image: 'image',

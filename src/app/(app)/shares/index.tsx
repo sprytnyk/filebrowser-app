@@ -17,7 +17,17 @@ import { useShareActions } from '@/hooks/use-share-actions';
 import { useShares } from '@/hooks/use-shares';
 import { useTheme } from '@/hooks/use-theme';
 import { errorMessage } from '@/lib/notify';
-import { byCreated, expiryText, hasPassword, isExpired, shareName } from '@/lib/shares';
+import { kindFromName, kindIcon } from '@/lib/files';
+import {
+  byCreated,
+  createdDate,
+  expiryDate,
+  expiresSoon,
+  expiryText,
+  hasPassword,
+  isExpired,
+  shareName,
+} from '@/lib/shares';
 import { parentDir } from '@/lib/url';
 import { useSelf } from '@/session/session';
 
@@ -96,82 +106,16 @@ export default function SharesScreen() {
             </View>
           )
         }
-        renderItem={({ item }) => {
-          const expired = isExpired(item, shares.dataUpdatedAt);
-          const folder = !item.singleFileShare;
-          return (
-            <View style={[styles.card, { backgroundColor: theme.surfacePrimary }]}>
-              <View style={styles.header}>
-                <Icon
-                  name={folder ? 'folder' : 'insert_drive_file'}
-                  color={item.pathExists ? theme.primary : theme.danger}
-                  style={expired && styles.dimmed}
-                />
-                <View style={[styles.flex, expired && styles.dimmed]}>
-                  <ThemedText numberOfLines={1}>{shareName(item)}</ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                    {item.source}:{item.path}
-                  </ThemedText>
-                  <View style={styles.meta}>
-                    <ThemedText
-                      type="caption"
-                      themeColor={expired ? 'danger' : 'textSecondary'}
-                      numberOfLines={1}>
-                      {expired ? t('mobile.expired') : expiryText(item, t, shares.dataUpdatedAt)}
-                    </ThemedText>
-                    {hasPassword(item) ? (
-                      <>
-                        <Icon name="lock" size={14} color={theme.textSecondary} />
-                        <ThemedText type="caption" themeColor="textSecondary">
-                          {t('mobile.passwordProtected')}
-                        </ThemedText>
-                      </>
-                    ) : null}
-                  </View>
-                </View>
-                {/* Up here rather than beside the chips, which need the full width in longer
-                    languages. Not dimmed: expired shares are the ones most often deleted. */}
-                {item.canEditShare ? (
-                  <HeaderButton
-                    icon="delete"
-                    label={t('general.delete')}
-                    color={theme.danger}
-                    onPress={() => void actions.remove(item)}
-                  />
-                ) : null}
-                <HeaderButton
-                  icon="more_vert"
-                  label={t('general.actions')}
-                  onPress={() => setSheetShare(item)}
-                />
-              </View>
-              {/* Wraps onto a second line only if a translation is too long for one. */}
-              <View style={styles.chips}>
-                <ChipButton
-                  icon="link"
-                  label={t('mobile.linkShort')}
-                  accessibilityLabel={t('buttons.copyToClipboard')}
-                  onPress={() => void actions.copy(item.shareURL)}
-                />
-                {item.downloadURL ? (
-                  <ChipButton
-                    icon={folder ? 'folder_zip' : 'download'}
-                    label={folder ? t('mobile.zipShort') : t('mobile.fileShort')}
-                    accessibilityLabel={
-                      folder ? t('mobile.copyArchiveLink') : t('mobile.copyDownloadLink')
-                    }
-                    onPress={() => void actions.copy(item.downloadURL)}
-                  />
-                ) : null}
-                <ChipButton
-                  icon="share"
-                  label={t('general.share')}
-                  onPress={() => void actions.send(item.shareURL, shareName(item))}
-                />
-              </View>
-            </View>
-          );
-        }}
+        renderItem={({ item }) => (
+          <ShareRow
+            share={item}
+            now={shares.dataUpdatedAt}
+            onDelete={() => void actions.remove(item)}
+            onMore={() => setSheetShare(item)}
+            onCopy={(url) => void actions.copy(url)}
+            onSend={() => void actions.send(item.shareURL, shareName(item))}
+          />
+        )}
       />
       <ActionSheet
         visible={sheetShare !== null}
@@ -188,19 +132,164 @@ export default function SharesScreen() {
   );
 }
 
+type ShareRowProps = {
+  share: ShareLink;
+  /** When the list was fetched, so expiry states match the data rather than the clock. */
+  now: number;
+  onDelete: () => void;
+  onMore: () => void;
+  onCopy: (url: string) => void;
+  onSend: () => void;
+};
+
+/** Laid out like a transfer row: a tinted edge and badge for the kind, then the details. */
+function ShareRow({ share, now, onDelete, onMore, onCopy, onSend }: ShareRowProps) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const folder = !share.singleFileShare;
+  const expired = isExpired(share, now);
+  const soon = expiresSoon(share, now);
+  const missing = !share.pathExists;
+  const created = createdDate(share);
+  const icon = kindIcon(kindFromName(shareName(share), folder));
+
+  // The item's kind color, unless the link is dead: red when the item is gone, gray once expired.
+  const [tint, tintBackground] = missing
+    ? [theme.danger, theme.errorBackground]
+    : expired
+      ? [theme.textSecondary, theme.surfaceSecondary]
+      : [icon.color, `${icon.color}26`];
+
+  const [expiryIcon, expiryColor, expiryLabel] = expired
+    ? (['timer_off', 'danger', `${t('mobile.expired')} · ${expiryDate(share)}`] as const)
+    : !share.expire
+      ? (['all_inclusive', 'textSecondary', expiryText(share, t, now)] as const)
+      : ([
+          soon ? 'alarm' : 'schedule',
+          soon ? 'warning' : 'textSecondary',
+          expiryText(share, t, now),
+        ] as const);
+
+  return (
+    <View style={[styles.row, { backgroundColor: theme.surfacePrimary, borderLeftColor: tint }]}>
+      <View style={styles.header}>
+        <View style={[styles.badge, { backgroundColor: tintBackground }]}>
+          <Icon name={missing ? 'link_off' : icon.name} color={tint} />
+        </View>
+        <View style={[styles.flex, expired && styles.dimmed]}>
+          <ThemedText numberOfLines={1}>{shareName(share)}</ThemedText>
+          <View style={styles.line}>
+            <Icon
+              name={folder ? 'folder_open' : 'description'}
+              size={14}
+              color={theme.textSecondary}
+            />
+            <ThemedText
+              type="caption"
+              themeColor="textSecondary"
+              numberOfLines={1}
+              ellipsizeMode="middle"
+              style={styles.shrink}>
+              {share.source}:{share.path}
+            </ThemedText>
+          </View>
+        </View>
+        {/* Up here rather than beside the chips, which need the full width in longer
+            languages. Not dimmed: expired shares are the ones most often deleted. */}
+        {share.canEditShare ? (
+          <HeaderButton
+            icon="delete"
+            label={t('general.delete')}
+            color={theme.danger}
+            onPress={onDelete}
+          />
+        ) : null}
+        <HeaderButton icon="more_vert" label={t('general.actions')} onPress={onMore} />
+      </View>
+      <View style={styles.details}>
+        {created ? (
+          <View style={styles.line}>
+            <Icon name="add_link" size={14} color={theme.textSecondary} />
+            <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+              {t('mobile.shareCreatedOn', { date: created })}
+            </ThemedText>
+          </View>
+        ) : null}
+        <View style={styles.line}>
+          <Icon name={expiryIcon} size={14} color={theme[expiryColor]} />
+          <ThemedText
+            type="caption"
+            themeColor={expiryColor}
+            numberOfLines={1}
+            style={styles.shrink}>
+            {expiryLabel}
+          </ThemedText>
+          {hasPassword(share) ? (
+            <>
+              <Icon name="lock" size={14} color={theme.textSecondary} />
+              <ThemedText type="caption" themeColor="textSecondary">
+                {t('mobile.passwordProtected')}
+              </ThemedText>
+            </>
+          ) : null}
+        </View>
+        {missing ? (
+          <View style={styles.line}>
+            <Icon name="warning" size={14} color={theme.danger} />
+            <ThemedText type="caption" themeColor="danger" numberOfLines={2} style={styles.shrink}>
+              {t('mobile.sharePathMissing')}
+            </ThemedText>
+          </View>
+        ) : null}
+        {/* Wraps onto a second line only if a translation is too long for one. */}
+        <View style={styles.chips}>
+          <ChipButton
+            icon="link"
+            label={t('mobile.linkShort')}
+            accessibilityLabel={t('buttons.copyToClipboard')}
+            onPress={() => onCopy(share.shareURL)}
+          />
+          {share.downloadURL ? (
+            <ChipButton
+              icon={folder ? 'folder_zip' : 'download'}
+              label={folder ? t('mobile.zipShort') : t('mobile.fileShort')}
+              accessibilityLabel={
+                folder ? t('mobile.copyArchiveLink') : t('mobile.copyDownloadLink')
+              }
+              onPress={() => onCopy(share.downloadURL)}
+            />
+          ) : null}
+          <ChipButton icon="share" label={t('general.share')} onPress={onSend} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  shrink: { flexShrink: 1 },
   pad: { padding: Spacing.three },
   list: { padding: Spacing.three, gap: Spacing.two },
   empty: { alignItems: 'center', gap: Spacing.two, paddingTop: Spacing.six },
-  card: {
+  row: {
     gap: Spacing.two,
     padding: Spacing.three,
     paddingRight: Spacing.two,
     borderRadius: Radius.medium,
+    borderLeftWidth: 3,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  badge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Lines up with the name, past the badge.
+  details: { gap: Spacing.two, paddingLeft: 40 + Spacing.three },
   dimmed: { opacity: 0.55 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  line: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });

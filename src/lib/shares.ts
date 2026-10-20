@@ -66,11 +66,25 @@ export function itemKey(item: { source: string; path: string }) {
 /** "Expires …" / "Expiration: …" (already past) / "Permanent". `now` keeps rendering pure. */
 export function expiryText(share: ShareLink, t: TFunction, now: number) {
   if (!share.expire) return t('general.permanent');
-  const date = new Date(share.expire * 1000);
-  const label = date.toLocaleString(formatLocale(), { dateStyle: 'medium', timeStyle: 'short' });
-  return date.getTime() < now
+  const label = expiryDate(share);
+  return share.expire * 1000 < now
     ? `${t('general.expiration')}: ${label}`
     : `${t('general.expires')} ${label}`;
+}
+
+export function createdDate(share: ShareLink) {
+  return share.createdAt ? dateTime(share.createdAt) : null;
+}
+
+export function expiryDate(share: ShareLink) {
+  return dateTime(share.expire);
+}
+
+function dateTime(seconds: number) {
+  return new Date(seconds * 1000).toLocaleString(formatLocale(), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 export function shareName(share: ShareLink) {
@@ -88,6 +102,11 @@ export function isExpired(share: ShareLink, now: number) {
  */
 export function hasPassword(share: ShareLink) {
   return /\/public\/share\/[^/?]+\?(.*&)?download=true/.test(share.downloadURL);
+}
+
+/** Within a day of expiring, so worth flagging. */
+export function expiresSoon(share: ShareLink, now: number) {
+  return share.expire > 0 && !isExpired(share, now) && share.expire * 1000 - now < 86_400_000;
 }
 
 /**

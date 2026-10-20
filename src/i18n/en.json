@@ -378,6 +378,8 @@
     "fileShort": "File",
     "passwordProtected": "Password",
     "expired": "Expired",
+    "sharePathMissing": "No longer on the server. It may have been moved outside the app or deleted.",
+    "shareCreatedOn": "Created {date}",
     "uploadSessionConflict": "An earlier upload of this file didn't finish, and the server keeps it reserved for up to 30 minutes. Try again later or upload it under another name.",
     "addedToTransfers": "{count} item(s) added to Transfers",
     "transferring": "Transferring {count} item(s)",
