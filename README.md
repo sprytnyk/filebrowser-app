@@ -24,6 +24,9 @@ stay in the web UI.
   size or date, and search.
 - **Manage files.** Create folders, rename, move, copy and delete, one at a time or several at
   once.
+- **Info.** Path, size, date and type for a file or folder, from its menu, from the viewer, or
+  from the button on a selected grid tile. Several selected items show their total size and how
+  many folders and files they are.
 - **Checksums.** A file's info sheet calculates its SHA-256 on the server, to check an upload or
   download against the original.
 - **Upload** from the file picker, the photo gallery, or a whole folder with its subfolders.
@@ -35,7 +38,8 @@ stay in the web UI.
   opens again at once until it changes on the server. Other files open in the app of your choice,
   or in the share sheet to save or send them when no app opens their type.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
-  manage your shares in one list.
+  manage your shares in one list. It shows the newest first, with when each link was made and
+  when it expires, and flags links that expire within a day or whose item is gone.
 - **Storage.** Settings shows how much each source holds and how much free space is left on its
   disk, in red with a warning once the disk is almost full. Uploads that wouldn't fit are stopped
   before they start, since the server doesn't check.
@@ -94,6 +98,13 @@ Checked against the v2.0.1-stable source:
   upload that started it for 30 minutes, so starting over gets a conflict. The app remembers
   that upload, so retrying, even after the app was closed, picks up from the last chunk the
   server confirmed.
+- **Share order and dates.** The server lists shares in a different order on almost every
+  request once there are more than 8, and records no creation date. The app reads the dates from
+  the activity log, which keeps 30 days by default, and sorts newest first. Older links come
+  after, by expiry.
+- **Share paths of scoped users.** For a user whose scope isn't `/`, the server returns share
+  paths with the scope in front, so they don't match the user's own paths. The app strips it, so
+  shared items are marked and "Go to item" opens the right folder.
 
 ## Requirements
 
