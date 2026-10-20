@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { createShare, listShares, type ShareUnit } from '@/api/share';
+import { createShare, type ShareUnit } from '@/api/share';
 import { type ShareLink } from '@/api/types';
 import { ShareLinkCard } from '@/components/shares/share-link-card';
 import { ThemedText } from '@/components/themed-text';
@@ -19,9 +19,10 @@ import { Icon } from '@/components/ui/icon';
 import { TextField } from '@/components/ui/text-field';
 import { ToastHost } from '@/components/ui/toast-host';
 import { Radius, Spacing } from '@/constants/theme';
+import { useShares } from '@/hooks/use-shares';
 import { useTheme } from '@/hooks/use-theme';
 import { errorMessage, toast } from '@/lib/notify';
-import { sharesForItem } from '@/lib/shares';
+import { byCreated, sharesForItem } from '@/lib/shares';
 import { useSelf } from '@/session/session';
 
 /**
@@ -39,7 +40,9 @@ export default function ShareCreateScreen() {
     name: string;
   }>();
   const { data: self } = useSelf();
-  const shares = useQuery({ queryKey: ['shares'], queryFn: listShares });
+  // Always ask the server: the cached list (kept alive by the files screen) misses links
+  // made in the web UI since it was fetched.
+  const shares = useShares({ refetchOnMount: 'always' });
   const [creating, setCreating] = useState(false);
   const [createdHash, setCreatedHash] = useState<string | null>(null);
   const [expires, setExpires] = useState('');
@@ -49,10 +52,15 @@ export default function ShareCreateScreen() {
   const [error, setError] = useState<string | null>(null);
   const menu = useActionSheet();
 
-  const existing = sharesForItem(shares.data ?? [], params, self?.username, [createdHash])
-    // Newest link first.
-    .sort((a, b) => Number(b.hash === createdHash) - Number(a.hash === createdHash));
-  const showForm = creating || (shares.isSuccess && existing.length === 0);
+  // In the Shares tab's order, but the link just made first even before its creation time loads.
+  const existing = byCreated(
+    sharesForItem(shares.data ?? [], params, self?.username, [createdHash]),
+    shares.dataUpdatedAt,
+  ).sort((a, b) => Number(b.hash === createdHash) - Number(a.hash === createdHash));
+  // Waits for the fresh list before offering the form, so it doesn't flash for an item whose
+  // links the cache doesn't know about yet.
+  const checking = shares.isPending || (shares.isFetching && existing.length === 0);
+  const showForm = creating || (shares.isSuccess && !checking && existing.length === 0);
 
   const units: { id: ShareUnit; title: string }[] = [
     { id: 'minutes', title: t('time.minutes') },
@@ -106,7 +114,7 @@ export default function ShareCreateScreen() {
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: Spacing.four + insets.bottom }]}
         keyboardShouldPersistTaps="handled">
-        {shares.isPending ? <ActivityIndicator color={theme.primary} /> : null}
+        {checking && !creating ? <ActivityIndicator color={theme.primary} /> : null}
         {shares.error ? <Banner kind="error" message={errorMessage(shares.error)} /> : null}
         {!showForm
           ? existing.map((share) => (
@@ -119,7 +127,7 @@ export default function ShareCreateScreen() {
               />
             ))
           : null}
-        {!showForm && shares.isSuccess ? (
+        {!showForm && !checking && shares.isSuccess ? (
           <Button
             title={t('mobile.newShare')}
             variant="secondary"

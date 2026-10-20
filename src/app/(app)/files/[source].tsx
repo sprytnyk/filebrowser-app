@@ -7,7 +7,6 @@ import { RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-nat
 
 import { ApiError } from '@/api/client';
 import { createFolder, getListing, search, searchResultToItem } from '@/api/resources';
-import { listShares } from '@/api/share';
 import { type FileItem, type SourcePermissions } from '@/api/types';
 import { getSources } from '@/api/users';
 import { Breadcrumbs } from '@/components/files/breadcrumbs';
@@ -32,6 +31,7 @@ import { useFileActions, useInvalidateListing } from '@/hooks/use-file-actions';
 import { useOpenFile } from '@/hooks/use-open-file';
 import { useSha256 } from '@/hooks/use-sha256';
 import { useSources } from '@/hooks/use-sources';
+import { useShares } from '@/hooks/use-shares';
 import { useTheme } from '@/hooks/use-theme';
 import { ask } from '@/lib/dialog';
 import { formatDate, formatSize, isValidName, sortItems } from '@/lib/files';
@@ -79,7 +79,7 @@ export default function FolderScreen() {
   const stackRoot = dir === '/' && self?.scopes.length === 1;
   const serverName = useServerName();
   const canShare = !!self?.permissions.share;
-  const shares = useQuery({ queryKey: ['shares'], queryFn: listShares, enabled: canShare });
+  const shares = useShares();
   const shared = useMemo(
     () => sharedKeys(shares.data ?? [], self?.username),
     [shares.data, self?.username],

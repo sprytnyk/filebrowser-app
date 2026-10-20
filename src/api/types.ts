@@ -91,6 +91,10 @@ export type ShareLink = {
   singleFileShare: boolean;
   pathExists: boolean;
   canEditShare: boolean;
+  /** Unix seconds, from the activity log; not part of the share API. See `useShares`. */
+  createdAt?: number;
+  /** The activity event's id: rises with every event, so it orders links made in the same second. */
+  createdSeq?: number;
 };
 
 export type SearchResult = {

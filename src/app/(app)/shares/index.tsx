@@ -1,10 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
-import { listShares } from '@/api/share';
 import { type ShareLink } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -16,9 +14,10 @@ import { Icon } from '@/components/ui/icon';
 import { ToastHost } from '@/components/ui/toast-host';
 import { Radius, Spacing } from '@/constants/theme';
 import { useShareActions } from '@/hooks/use-share-actions';
+import { useShares } from '@/hooks/use-shares';
 import { useTheme } from '@/hooks/use-theme';
 import { errorMessage } from '@/lib/notify';
-import { activeFirst, expiryText, hasPassword, isExpired, shareName } from '@/lib/shares';
+import { byCreated, expiryText, hasPassword, isExpired, shareName } from '@/lib/shares';
 import { parentDir } from '@/lib/url';
 import { useSelf } from '@/session/session';
 
@@ -26,11 +25,15 @@ export default function SharesScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
   const { data: self } = useSelf();
-  const shares = useQuery({
-    queryKey: ['shares'],
-    queryFn: listShares,
-    enabled: !!self?.permissions.share,
-  });
+  const shares = useShares();
+  // Tabs stay mounted, so reload on every visit: links made in the web UI or deleted there
+  // would otherwise only show after a pull to refresh.
+  const { refetch } = shares;
+  useFocusEffect(
+    useCallback(() => {
+      void refetch({ cancelRefetch: false });
+    }, [refetch]),
+  );
 
   const [sheetShare, setSheetShare] = useState<ShareLink | null>(null);
 
@@ -75,7 +78,7 @@ export default function SharesScreen() {
         </View>
       ) : null}
       <FlatList
-        data={activeFirst(shares.data ?? [], shares.dataUpdatedAt)}
+        data={byCreated(shares.data ?? [], shares.dataUpdatedAt)}
         keyExtractor={(s) => s.hash}
         contentContainerStyle={styles.list}
         refreshControl={

@@ -16,6 +16,27 @@ function samePath(a: string, b: string) {
 }
 
 /**
+ * The server stores and returns share paths with the owner's scope in front (alice's
+ * `/photos/cat.jpg` comes back as `/users/alice/photos/cat.jpg`), while listings and routes use
+ * paths inside the scope. Strips the signed-in user's scope so the two compare; links outside it
+ * (other users' shares, listed for admins) keep their full path.
+ */
+export function withScopedPaths(
+  shares: ShareLink[],
+  scopes: readonly { name: string; scope: string }[],
+): ShareLink[] {
+  return shares.map((share) => {
+    const scope = stripSlash(scopes.find((s) => s.name === share.source)?.scope ?? '/');
+    if (scope === '/' || scope === '') return share;
+    const path = stripSlash(share.path);
+    if (path === scope) return { ...share, path: '/' };
+    return path.startsWith(`${scope}/`)
+      ? { ...share, path: share.path.slice(scope.length) }
+      : share;
+  });
+}
+
+/**
  * Links that point at one item. Admins list everyone's shares, so keep the user's own plus
  * `alsoHashes` (e.g. a link just created), like upstream's per-item view.
  */
@@ -69,7 +90,33 @@ export function hasPassword(share: ShareLink) {
   return /\/public\/share\/[^/?]+\?(.*&)?download=true/.test(share.downloadURL);
 }
 
-/** Active shares first, expired ones at the end; otherwise keeps the server's order. */
-export function activeFirst(shares: ShareLink[], now: number) {
-  return [...shares].sort((a, b) => Number(isExpired(a, now)) - Number(isExpired(b, now)));
+/**
+ * Newest first for links whose creation date is known (see `useShares`), then the rest by
+ * expiry, then expired links. The server lists shares in Go map order, which changes on every
+ * request past 8 links, so this has to be a total order to keep the list still on refresh.
+ */
+export function byCreated(shares: ShareLink[], now: number) {
+  const rank = (s: ShareLink) => (isExpired(s, now) ? 2 : s.createdAt ? 0 : 1);
+  const expiryOrder = new Map(byExpiry(shares, now).map((s, i) => [s.hash, i]));
+  return [...shares].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (b.createdSeq ?? 0) - (a.createdSeq ?? 0) ||
+      expiryOrder.get(a.hash)! - expiryOrder.get(b.hash)!,
+  );
+}
+
+/**
+ * Soonest expiry first, permanent links after those, already expired ones last (most recently
+ * expired first). Ties go by name and then hash.
+ */
+export function byExpiry(shares: ShareLink[], now: number) {
+  const rank = (s: ShareLink) => (isExpired(s, now) ? 2 : s.expire ? 0 : 1);
+  return [...shares].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (rank(a) === 2 ? b.expire - a.expire : a.expire - b.expire) ||
+      shareName(a).localeCompare(shareName(b)) ||
+      a.hash.localeCompare(b.hash),
+  );
 }
