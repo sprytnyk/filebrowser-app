@@ -117,6 +117,16 @@ Checked against the v2.0.1-stable source:
 Plain `http://` servers work, but the app warns that your password and files travel
 unencrypted. Use HTTPS for anything outside your home network.
 
+### Faster downloads
+
+The app downloads each file over one connection. Linux servers use the cubic congestion
+control by default. In the tests in
+[Self-hosted speed tests: HTTP/1.1 and BBR](https://sprytnyk.dev/posts/self-hosted-speed-tests-http1-bbr/),
+one connection on a 100 Mbps line reached 30 to 36 Mbps with cubic and 57 to 90 Mbps with BBR.
+The post also shows how to turn BBR on. In a short test on a 100 Mbps line with BBR, the app
+downloaded at 9 to 11 MB/s, about 72 to 88 Mbps. BBR only changes how the server sends data, so
+it speeds up downloads and not uploads.
+
 ## Privacy
 
 The app doesn't collect any data about you. There are no analytics, no tracking, no ads and no
