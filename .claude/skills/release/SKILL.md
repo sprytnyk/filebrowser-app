@@ -1,6 +1,6 @@
 ---
 name: release
-description: Ship a new version of the app. Bumps the version, makes a signed release commit and tag, pushes, builds the APK on this machine with `eas build --local`, writes and signs SHA256SUMS in dist/, and writes the release notes there too. Use when the user asks to release, ship, or "ship it as usual".
+description: Ship a new version of the app. Bumps the version, makes a signed release commit and tag, pushes, builds the APK on this machine with `eas build --local`, writes and signs SHA256SUMS in dist/, writes the release notes there too, and publishes the GitHub release with gh. Use when the user asks to release, ship, or "ship it as usual".
 argument-hint: '[version, e.g. 1.3.1; derived from commits if omitted]'
 disable-model-invocation: true
 ---
@@ -14,6 +14,8 @@ release notes.
 
 Stop and report back if any step fails. Don't work around a failure.
 
+`gh` is installed and logged in. Use it to publish the GitHub release.
+
 ## 1. Pre-flight
 
 - You must be on `main`, and `git fetch origin` must show `main` neither behind nor diverged.
@@ -26,6 +28,9 @@ Stop and report back if any step fails. Don't work around a failure.
     `build(deps): update expo packages to sdk <major> patch versions`. The update ships in
     this release and goes under Other in the notes.
   - **No:** keep the current versions and list the outdated packages in the report.
+- `gh repo view --json nameWithOwner --jq .nameWithOwner` must print
+  `sprytnyk/filebrowser-app`. If `gh` is missing or not logged in, stop and ask the user to
+  fix it before you tag anything.
 - **Uncommitted work** gets committed first. Make one Conventional Commit per logical change
   (unsigned) and let the pre-commit hook run. Never stage secret files, `dist/` or scratch
   files. If it's unclear whether a change belongs in the release, ask.
@@ -56,7 +61,7 @@ Stop and report back if any step fails. Don't work around a failure.
 
 ## 3. Signed release commit and tag
 
-Only the release commit and its tag are signed:
+Sign only the release commit and its tag:
 
 ```bash
 git add app.json package.json package-lock.json
@@ -75,12 +80,12 @@ git push origin main
 git push origin vX.Y.Z
 ```
 
-If either push is rejected, stop and ask. Never force-push.
+If the remote rejects either push, stop and ask. Never force-push.
 
 ## 5. Local EAS build
 
-The APK is built on this machine with `eas build --local`. It runs the same steps as an EAS
-cloud build, from the committed tree (the gitignored `android/` folder isn't used). EAS still
+`eas build --local` builds the APK on this machine. It runs the same steps as an EAS cloud
+build, from the committed tree, and doesn't use the gitignored `android/` folder. EAS still
 signs it with the keystore it manages, downloaded just for the build, and still bumps
 `versionCode` remotely. The only traffic to EAS is checking the project and fetching that
 keystore.
@@ -106,7 +111,7 @@ JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk \
 The user may want to watch the build. If so, give them the command to run in their own
 terminal and continue once they say it finished. Otherwise run it yourself with
 `run_in_background`, sending its output to a log file in the scratchpad, and wait for the
-notification. It takes about 10–20 minutes. Don't poll.
+notification. It takes about 10 to 20 minutes. Don't poll.
 
 If the build fails, report the error from the end of the log (Gradle's "What went wrong"
 block) and stop.
@@ -130,7 +135,7 @@ JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 "$APKSIGNER" verify --print-certs d
 JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 "$APKSIGNER" verify --print-certs dist/<previous>/filebrowser-app-<previous>.apk | grep 'SHA-256'
 ```
 
-The two digests must match. If they don't, stop: users couldn't update without uninstalling.
+The two digests must match. If they don't, stop. Users couldn't update without uninstalling.
 
 Then, from `dist/vX.Y.Z`, write, sign and verify the checksums:
 
@@ -148,9 +153,9 @@ The signature must say Good, from `0xC00C0F0D647BD3C6`.
 Write them from the commits since the previous tag, in plain words, and say why a change
 matters when it isn't obvious. Leave out sections that would be empty. Save them to
 `dist/vX.Y.Z/RELEASE_NOTES.md` (the content below, without the fence), so they sit next to
-the APK and checksums. Leave the notes out of `SHA256SUMS`: they quote the checksums, so they
-are written after signing. Also give them in one fenced `markdown` block in the report, ready
-to paste into the GitHub release:
+the APK and checksums. Leave the notes out of `SHA256SUMS`. They quote the checksums, so you
+write them after signing. In the Full Changelog link, `<last-tag>` is the previous tag from
+step 2, so the link shows the diff between the two tags.
 
 ````markdown
 ### Features
@@ -173,9 +178,26 @@ sha256sum -c SHA256SUMS
 ```
 
 Signing key: 0xC00C0F0D647BD3C6
+
+**Full Changelog**: https://github.com/sprytnyk/filebrowser-app/compare/<last-tag>...vX.Y.Z
 ````
 
-## 8. Report
+## 8. Publish the GitHub release
+
+Anyone can see a published release, so ask first with a pop-up: publish now, publish as a
+draft, or leave it to the user. The title is `filebrowser-app vX.Y.Z`.
+
+```bash
+gh release create vX.Y.Z --verify-tag --title "filebrowser-app vX.Y.Z" \
+  --notes-file dist/vX.Y.Z/RELEASE_NOTES.md \
+  dist/vX.Y.Z/filebrowser-app-vX.Y.Z.apk dist/vX.Y.Z/SHA256SUMS dist/vX.Y.Z/SHA256SUMS.asc
+gh release view vX.Y.Z --json url,isDraft,assets
+```
+
+Add `--draft` when the user picks a draft. The release must list 3 files: the APK,
+`SHA256SUMS` and `SHA256SUMS.asc`.
+
+## 9. Report
 
 Report briefly:
 
@@ -185,7 +207,8 @@ Report briefly:
 - that the build ran locally, and that its signing certificate matches the previous release
 - the four files in `dist/vX.Y.Z/` (APK, `SHA256SUMS`, `SHA256SUMS.asc`, `RELEASE_NOTES.md`) and the
   verification result
-- the release notes block
+- the release link, or the release notes in one fenced `markdown` block if the user publishes
+  it themselves
 - leftovers, such as running test containers or `adb reverse`
 
 Don't test on the phone yourself unless the user asks.
