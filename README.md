@@ -147,7 +147,7 @@ FileBrowser Quantum v2.0.1-stable running in Docker and a real self-hosted serve
 
 ## Development
 
-You need Node.js, an Android phone with USB debugging, JDK 17 and the Android SDK with the
+You need Node.js 26, an Android phone with USB debugging, JDK 17 and the Android SDK with the
 platform, build tools and NDK versions listed in
 `node_modules/react-native/gradle/libs.versions.toml`.
 

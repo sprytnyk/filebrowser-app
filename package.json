@@ -2,6 +2,9 @@
   "name": "filebrowser-app",
   "main": "expo-router/entry",
   "version": "1.7.1",
+  "engines": {
+    "node": "^26.0.0"
+  },
   "dependencies": {
     "@expo/ui": "~57.0.25",
     "@shopify/flash-list": "2.0.2",
