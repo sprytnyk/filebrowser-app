@@ -17,9 +17,9 @@ stay in the web UI.
 
 - **Several servers.** Add as many servers as you like, give each one your own name and switch
   between them. Each server keeps its own sign-in.
-- **Sign-in.** Password (including LDAP) and two-factor codes (TOTP). Servers that require a
-  password change on first login are handled too. Servers behind a sign-in page on the reverse
-  proxy (forward auth, with FileBrowser's proxy auth) open that page in the app.
+- **Sign-in.** Password (including LDAP) and two-factor codes (TOTP). The app also handles
+  servers that require a password change on first login. Servers behind a sign-in page on the
+  reverse proxy (forward auth, with FileBrowser's proxy auth) open that page in the app.
 - **Browse.** List or grid view, thumbnails (for PDFs too, from the first page), sort by name,
   size or date, and search.
 - **Manage files.** Create folders, rename, move, copy and delete, one at a time or several at
@@ -32,17 +32,17 @@ stay in the web UI.
 - **Upload** from the file picker, the photo gallery, or a whole folder with its subfolders.
   Large files go up in chunks, retry after short network drops, and resume where they stopped.
 - **Download** to a device folder you pick once. Folders and multiple items download as a zip.
-  If the folder already has a file with that name, the new one is saved as "name (1).ext".
-  Downloads retry after short network drops, and a single file resumes where it stopped.
-- **View** images, video, audio and PDFs in the app. A PDF is downloaded once and kept, so it
-  opens again at once until it changes on the server. Other files open in the app of your choice,
+  If the folder already has a file with that name, the app saves the new one as
+  "name (1).ext". Downloads retry after short network drops, and a single file resumes where it stopped.
+- **View** images, video, audio and PDFs in the app. The app downloads a PDF once and keeps it,
+  so it opens again at once until it changes on the server. Other files open in the app of your choice,
   or in the share sheet to save or send them when no app opens their type.
 - **Share.** Create share links with an optional expiry and password, copy or send them, and
   manage your shares in one list. It shows the newest first, with when each link was made and
   when it expires, and flags links that expire within a day or whose item is gone.
 - **Storage.** Settings shows how much each source holds and how much free space is left on its
-  disk, in red with a warning once the disk is almost full. Uploads that wouldn't fit are stopped
-  before they start, since the server doesn't check.
+  disk, in red with a warning once the disk is almost full. The app stops uploads that wouldn't
+  fit before they start, since the server doesn't check.
 - **Transfers.** A tab with progress, speed and history for uploads and downloads, with cancel
   and retry, uploads in green and downloads in blue. Transfers keep going when you switch servers
   and when the app is in the background, with their progress in a notification.
@@ -55,8 +55,8 @@ stay in the web UI.
 
 ## What it covers
 
-The app is built on the server's own API (the Go backend), the same one the web UI uses. It
-covers part of it:
+The app uses the server's own API (the Go backend), the same one the web UI uses. It covers part
+of it:
 
 | Covered by the app                                                                                                                                       | Left to the web UI                                                                                                               |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -75,16 +75,15 @@ The scope is narrow on purpose:
   Administration and power tools are rare tasks that work better on a big screen, and the web
   UI already does them well.
 - **Less can break.** Every API call the app makes is one more thing a server update can
-  change. A small surface means fewer of those, and each one was checked against
-  v2.0.1-stable.
-- **It's easier to test and maintain.** Every feature listed here was tried on a real phone.
-  A smaller app keeps that realistic.
+  change. The app makes few of them, and I checked each one against v2.0.1-stable.
+- **It's easier to test and maintain.** I tried every feature listed here on a real phone. With
+  a smaller app, I can keep doing that.
 
 Anything the app leaves out is still in the web UI on the same server.
 
 ### Gaps in the server it works around
 
-Checked against the v2.0.1-stable source:
+I checked these against the v2.0.1-stable source:
 
 - **Free space before uploads.** The server doesn't check free space. It writes an upload until
   the disk is full and then fails it. The app checks first, counting uploads still waiting in
@@ -134,7 +133,8 @@ crash reporting.
 
 - The app only talks to the servers you add. Nothing goes to the app's developer or any third
   party.
-- Your session token is kept in Android's encrypted secure storage. Your password isn't stored.
+- The app keeps your session token in Android's encrypted secure storage. It doesn't store your
+  password.
 - For a server behind a sign-in page, that page's session cookie stays in the app's private web
   storage, like in a browser.
 - Server addresses and settings stay on the device. Removing a server signs you out of it and
@@ -142,8 +142,8 @@ crash reporting.
 
 ## Testing
 
-The app is tested manually with a release build on a physical Android phone, against
-FileBrowser Quantum v2.0.1-stable running in Docker and a real self-hosted server over HTTPS.
+I test the app by hand with a release build on a physical Android phone, against FileBrowser
+Quantum v2.0.1-stable running in Docker and a real self-hosted server over HTTPS.
 
 ## Development
 
@@ -158,13 +158,13 @@ npm run android   # builds a development build, installs it over USB and starts 
 ```
 
 The app also starts in [Expo Go](https://expo.dev/go), but Expo Go lacks the app's native
-modules in `modules/`. There PDFs open in another app instead of the viewer, transfers pause
-when the app goes to the background, and servers behind a sign-in gateway only partly work.
+modules in `modules/`. In Expo Go, PDFs open in another app instead of the viewer, transfers
+pause when the app goes to the background, and servers behind a sign-in page only partly work.
 
 Checks:
 
 ```bash
-npm run lint       # ESLint (eslint-config-expo) + Prettier
+npm run lint       # ESLint (eslint-config-expo) and Prettier
 npm run typecheck  # tsc --noEmit
 npm run format     # Prettier --write
 ```
@@ -179,7 +179,7 @@ as `http://localhost:8080`.
 
 ### Release builds
 
-Release APKs are built locally with `eas build --local`, using the same toolchain:
+I build release APKs on my machine with `eas build --local`, using the same toolchain:
 
 ```bash
 npx eas-cli@latest build -p android --profile preview --local
@@ -210,8 +210,8 @@ modules/         the app's own Android native modules: gateway cookies, PDF page
 - [FileBrowser Quantum](https://github.com/gtsteffaniak/filebrowser) by gtsteffaniak. The logo
   and the interface text come from that project, which is licensed under Apache-2.0.
 - This is an independent client, not affiliated with the FileBrowser Quantum project.
-- I don't have deep React Native experience, so the project structure
-  may not be perfect. The app has been tested and works, and suggestions are welcome.
+- I don't have deep React Native experience, so the project structure may not be perfect. I've
+  tested the app and it works. Suggestions are welcome.
 
 ## License
 
