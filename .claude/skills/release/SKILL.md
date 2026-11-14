@@ -24,16 +24,20 @@ Stop and report back if any step fails. Don't work around a failure.
   installed, expected) and ask the user whether to update them now. Don't continue the
   release until they answer.
   - **Yes:** run `npx expo install --fix`. `git diff --stat` should show only `package.json`
-    and `package-lock.json`. Run `npx expo-doctor` again, then commit (unsigned, hook runs) as
-    `build(deps): update expo packages to sdk <major> patch versions`. The update ships in
-    this release and goes under Other in the notes.
+    and `package-lock.json`. Run `npx expo-doctor` again, then make a signed commit
+    (`git commit -S`) as `build(deps): update expo packages to sdk <major> patch versions`, and
+    let the hook run. The update ships in this release and goes under Other in the notes.
   - **No:** keep the current versions and list the outdated packages in the report.
 - `gh repo view --json nameWithOwner --jq .nameWithOwner` must print
   `sprytnyk/filebrowser-app`. If `gh` is missing or not logged in, stop and ask the user to
   fix it before you tag anything.
-- **Uncommitted work** gets committed first. Make one Conventional Commit per logical change
-  (unsigned) and let the pre-commit hook run. Never stage secret files, `dist/` or scratch
-  files. If it's unclear whether a change belongs in the release, ask.
+- **Uncommitted work** gets committed first. Make one Conventional Commit per logical change,
+  signed with `git commit -S`, and let the pre-commit hook run. Never stage secret files,
+  `dist/` or scratch files. If it's unclear whether a change belongs in the release, ask.
+- **Every new commit must be signed.** Run `git log --format='%h %G? %s' <last-tag>..HEAD`.
+  Each line must show `G`. Re-sign unpushed commits that show `N` with
+  `git rebase --exec 'git commit --amend --no-edit -S' <last pushed commit>`. This only adds
+  signatures. If an unsigned commit is already pushed, stop and ask.
 - Run the checks. All three must pass, except for version mismatches the user chose to keep:
   ```bash
   npx expo lint
@@ -61,7 +65,7 @@ Stop and report back if any step fails. Don't work around a failure.
 
 ## 3. Signed release commit and tag
 
-Sign only the release commit and its tag:
+Commit the bump and tag it, both signed:
 
 ```bash
 git add app.json package.json package-lock.json
