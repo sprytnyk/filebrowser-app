@@ -65,12 +65,12 @@ Sign only the release commit and its tag:
 
 ```bash
 git add app.json package.json package-lock.json
-git commit -S -m "chore(release): vX.Y.Z"
+git commit -S -m "chore(release): X.Y.Z"
 git tag -s vX.Y.Z -m vX.Y.Z
 git verify-commit HEAD && git tag -v vX.Y.Z
 ```
 
-The commit message is just `chore(release): vX.Y.Z`, with no body and no trailers.
+The commit message is just `chore(release): X.Y.Z`, with no body and no trailers.
 If gpg pinentry times out, ask the user to run the command themselves with a `!` prefix.
 
 ## 4. Push
